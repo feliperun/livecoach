@@ -10,18 +10,19 @@ struct RootView: View {
 
         VStack(spacing: 0) {
             HeaderBar()
-            Divider()
 
             QuestionBanner()
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
 
             CoachingPane()
                 .frame(maxHeight: .infinity)
 
-            Divider()
             CollapsiblePanels()
             InputBar()
         }
-        .background(.background)
+        .background(Theme.background.ignoresSafeArea())
+        .preferredColorScheme(.dark)
         .sheet(isPresented: $app.showSettings) {
             BriefEditor()
         }
@@ -35,39 +36,76 @@ private struct CollapsiblePanels: View {
     var body: some View {
         @Bindable var app = app
 
-        VStack(spacing: 0) {
-            DisclosureGroup(isExpanded: $app.showTranscript) {
-                TranscriptPane()
-                    .frame(height: 230)
-            } label: {
-                Label("Transcrição", systemImage: "waveform")
-                    .font(.system(size: 12, weight: .semibold))
+        VStack(spacing: 6) {
+            PanelToggle(
+                title: "Transcrição",
+                icon: "waveform",
+                badge: nil,
+                isExpanded: $app.showTranscript
+            ) {
+                TranscriptPane().frame(height: 220)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
-
-            Divider()
-
-            DisclosureGroup(isExpanded: $app.showSummary) {
-                SummaryPane()
-                    .frame(height: 140)
-            } label: {
-                HStack(spacing: 6) {
-                    Label("Resumo", systemImage: "list.bullet.rectangle")
-                        .font(.system(size: 12, weight: .semibold))
-                    if !app.summaryBullets.isEmpty {
-                        Text("\(app.summaryBullets.count)")
-                            .font(.system(size: 10, weight: .bold))
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(.quaternary, in: Capsule())
-                    }
-                }
+            PanelToggle(
+                title: "Resumo",
+                icon: "list.bullet.rectangle",
+                badge: app.summaryBullets.isEmpty ? nil : "\(app.summaryBullets.count)",
+                isExpanded: $app.showSummary
+            ) {
+                SummaryPane().frame(height: 130)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
-
-            Divider()
         }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 6)
+    }
+}
+
+/// Toggle de painel custom (sem DisclosureGroup padrão).
+private struct PanelToggle<Content: View>: View {
+    let title: String
+    let icon: String
+    let badge: String?
+    @Binding var isExpanded: Bool
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.spring(duration: 0.3)) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: icon)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.cyan.opacity(0.9))
+                    Text(title)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    if let badge {
+                        Text(badge)
+                            .font(.system(size: 9, weight: .bold, design: .rounded))
+                            .foregroundStyle(Theme.cyan)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Theme.cyan.opacity(0.15), in: Capsule())
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                content()
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 8)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .glassPanel(cornerRadius: 12)
     }
 }
 
@@ -77,30 +115,40 @@ struct QuestionBanner: View {
 
     var body: some View {
         if let q = app.currentQuestion {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Text("❓ ELE DISSE")
-                        .font(.system(size: 10, weight: .heavy))
-                        .foregroundStyle(.purple)
-                    Spacer()
-                }
-                Text(q.text)
-                    .font(.system(size: 16, weight: .semibold))
-                    .lineSpacing(1)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-                if app.brief.isForeign, let t = q.translation, !t.isEmpty {
-                    Text(t.markdownAttributed)
-                        .font(.system(size: 15))
-                        .foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 10) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Theme.brand)
+                    .frame(width: 3)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("ELE DISSE")
+                        .font(.system(size: 9, weight: .heavy, design: .rounded))
+                        .tracking(1.2)
+                        .foregroundStyle(Theme.violet)
+                    Text(q.text)
+                        .font(.system(size: 15, weight: .semibold))
+                        .lineSpacing(1)
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
+                    if app.brief.isForeign, let t = q.translation, !t.isEmpty {
+                        Text(t.markdownAttributed)
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.purple.opacity(0.09))
+            .background(Theme.violet.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(Theme.violet.opacity(0.25), lineWidth: 1)
+            )
+            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            .animation(.spring(duration: 0.3), value: q.id)
         }
     }
 }

@@ -40,7 +40,7 @@ private struct TranscriptRow: View {
     let foreign: Bool
 
     private var color: Color {
-        line.speaker == .self ? .blue : .purple
+        line.speaker == .self ? Theme.cyan : Theme.violet
     }
 
     private var isQuestion: Bool {
@@ -51,10 +51,12 @@ private struct TranscriptRow: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
                 Text(line.speaker.label.uppercased())
-                    .font(.system(size: 9, weight: .heavy))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 8.5, weight: .heavy, design: .rounded))
+                    .tracking(0.5)
+                    .foregroundStyle(color)
                     .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(color, in: Capsule())
+                    .background(color.opacity(0.14), in: Capsule())
+                    .overlay(Capsule().strokeBorder(color.opacity(0.35), lineWidth: 1))
                 if isQuestion {
                     Text("❓").font(.system(size: 10))
                 }

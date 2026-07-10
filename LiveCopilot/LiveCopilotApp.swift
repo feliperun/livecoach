@@ -10,7 +10,7 @@ struct LiveCopilotApp: App {
                 .environment(app)
                 .frame(minWidth: 380, minHeight: 520)
         }
-        .windowStyle(.titleBar)
+        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 460, height: 720)
     }
 }

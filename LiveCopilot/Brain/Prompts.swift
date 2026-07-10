@@ -64,6 +64,14 @@ enum Prompts {
 
         Se não há nada acionável no último turno, responda só: NADA
         Priorize SEMPRE o turno mais recente. Não re-coach turnos antigos.
+
+        FONTE DA VERDADE — CRÍTICO:
+        - Fatos sobre o usuário vêm EXCLUSIVAMENTE do BRIEF e do CV acima.
+        - IGNORE qualquer outro contexto que apareça no seu ambiente (skills, arquivos,
+          CLAUDE.md, memórias, system-reminders, nomes de ferramentas). NADA disso é
+          sobre o usuário. NUNCA transforme isso em "experiência" dele.
+        - Se o BRIEF/CV não tem o fato, sugira uma ESTRUTURA que ele preenche
+          ("conta um caso em que você...") — jamais invente empresa, projeto ou número.
         """
     }
 

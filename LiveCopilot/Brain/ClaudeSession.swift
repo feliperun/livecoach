@@ -56,6 +56,11 @@ actor ClaudeSession {
         proc.executableURL = URL(fileURLWithPath: shell)
         proc.arguments = ["-lc", script]
         proc.environment = env
+        // cwd isolado e vazio: evita o CLI carregar CLAUDE.md/contexto de um projeto
+        // por acidente (vazaria contexto pessoal pro coach).
+        let isolated = FileManager.default.temporaryDirectory.appendingPathComponent("LiveCopilotCLI", isDirectory: true)
+        try? FileManager.default.createDirectory(at: isolated, withIntermediateDirectories: true)
+        proc.currentDirectoryURL = isolated
 
         let inPipe = Pipe()
         let outPipe = Pipe()
