@@ -8,9 +8,9 @@ struct LiveCopilotApp: App {
         WindowGroup {
             RootView()
                 .environment(app)
-                .frame(minWidth: 900, minHeight: 560)
+                .frame(minWidth: 380, minHeight: 520)
         }
         .windowStyle(.titleBar)
-        .defaultSize(width: 1120, height: 720)
+        .defaultSize(width: 460, height: 720)
     }
 }

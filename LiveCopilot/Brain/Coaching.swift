@@ -16,14 +16,15 @@ final class CoachingLane: Sendable {
     func coach(
         window: [Turn],
         latest: String,
-        manual: Bool
+        manual: Bool,
+        speakerCertain: Bool = true
     ) -> AsyncThrowingStream<CoachCard, Error> {
         AsyncThrowingStream { continuation in
             guard let session = manual ? (manualS ?? live) : live else {
                 continuation.finish()
                 return
             }
-            let user = Prompts.coachUser(window: window, latest: latest, manual: manual)
+            let user = Prompts.coachUser(window: window, latest: latest, manual: manual, speakerCertain: speakerCertain)
             let cardID = UUID()
 
             let task = Task {

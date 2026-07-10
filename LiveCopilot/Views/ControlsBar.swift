@@ -1,97 +1,111 @@
 import SwiftUI
 
-struct ControlsBar: View {
+/// Header fino: status, captura do interlocutor, pin, silêncio, ajustes, iniciar/parar.
+struct HeaderBar: View {
     @Environment(AppModel.self) private var app
-
-    private let langs = ["pt-BR", "en-US", "es-ES", "fr-FR", "de-DE", "it-IT"]
 
     var body: some View {
         @Bindable var app = app
 
-        VStack(spacing: 8) {
-            HStack(spacing: 12) {
-                Picker("Modo", selection: $app.brief.mode) {
-                    ForEach(Mode.allCases) { Text($0.label).tag($0) }
+        HStack(spacing: 10) {
+            Circle()
+                .fill(app.isRunning ? .green : .secondary)
+                .frame(width: 8, height: 8)
+            Text(app.statusText)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(app.isRunning ? .primary : .secondary)
+                .lineLimit(1)
+
+            if app.isRunning {
+                CaptureBadge(active: app.systemCaptureActive) {
+                    app.openScreenRecordingSettings()
                 }
-                .frame(width: 170)
-                .disabled(app.isRunning)
-
-                Picker("Conversa", selection: $app.brief.conversationLang) {
-                    ForEach(langs, id: \.self) { Text($0).tag($0) }
-                }
-                .frame(width: 135)
-                .disabled(app.isRunning)
-
-                Picker("Nativo", selection: $app.brief.nativeLang) {
-                    ForEach(langs, id: \.self) { Text($0).tag($0) }
-                }
-                .frame(width: 135)
-                .disabled(app.isRunning)
-
-                Picker("Coach", selection: $app.coachModel) {
-                    ForEach(CoachModel.allCases) { Text($0.label).tag($0) }
-                }
-                .frame(width: 170)
-                .disabled(app.isRunning)
-                .help("Modelo do live coach. Opus = mais profundo; Sonnet = mais rápido.")
-
-                Spacer()
-
-                if app.isRunning {
-                    CaptureBadge(active: app.systemCaptureActive)
-                }
-
-                Text(app.statusText)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(app.isRunning ? .green : .secondary)
-
-                Button(app.isRunning ? "Parar" : "Iniciar") {
-                    app.isRunning ? app.stop() : app.start()
-                }
-                .keyboardShortcut(.return, modifiers: [.command])
-                .buttonStyle(.borderedProminent)
-                .tint(app.isRunning ? .red : .accentColor)
-
-                Toggle(isOn: Binding(get: { app.silenceMode }, set: { _ in app.toggleSilence() })) {
-                    Label("Silêncio", systemImage: app.silenceMode ? "speaker.slash" : "speaker.wave.2")
-                }
-                .toggleStyle(.button)
-                .help("Pausa o coach, mantém a transcrição")
             }
 
-            HStack(spacing: 8) {
-                Image(systemName: "text.bubble")
-                    .foregroundStyle(.secondary)
-                TextField("Dúvida no meio da conversa → coach (Sonnet)…", text: $app.manualInput)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 14))
-                    .onSubmit { app.ask() }
-                Button("Perguntar") { app.ask() }
-                    .disabled(app.manualInput.trimmingCharacters(in: .whitespaces).isEmpty || !app.isRunning)
+            Spacer()
+
+            Toggle(isOn: $app.pinned) {
+                Image(systemName: app.pinned ? "pin.fill" : "pin")
             }
+            .toggleStyle(.button)
+            .help("Janela sempre no topo")
+
+            Toggle(isOn: Binding(get: { app.silenceMode }, set: { _ in app.toggleSilence() })) {
+                Image(systemName: app.silenceMode ? "speaker.slash" : "speaker.wave.2")
+            }
+            .toggleStyle(.button)
+            .help("Pausa o coach, mantém a transcrição")
+
+            Button {
+                app.showSettings = true
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .help("Brief da sessão: modo, idiomas, modelo, CV")
+            .disabled(app.isRunning)
+
+            Button(app.isRunning ? "Parar" : "Iniciar") {
+                app.isRunning ? app.stop() : app.start()
+            }
+            .keyboardShortcut(.return, modifiers: [.command])
+            .buttonStyle(.borderedProminent)
+            .tint(app.isRunning ? .red : .accentColor)
+            .controlSize(.small)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(.bar)
     }
 }
 
-/// Indica se o áudio do interlocutor (ScreenCaptureKit) está sendo capturado.
-private struct CaptureBadge: View {
-    let active: Bool
+/// Campo de pergunta manual, colado na base.
+struct InputBar: View {
+    @Environment(AppModel.self) private var app
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: active ? "headphones" : "exclamationmark.triangle.fill")
-                .font(.system(size: 11))
-            Text(active ? "Interlocutor" : "Só você")
-                .font(.system(size: 11, weight: .semibold))
+        @Bindable var app = app
+
+        HStack(spacing: 8) {
+            TextField("Pergunta rápida pro coach…", text: $app.manualInput)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 13))
+                .onSubmit { app.ask() }
+            Button {
+                app.ask()
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 20))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.tint)
+            .disabled(app.manualInput.trimmingCharacters(in: .whitespaces).isEmpty || !app.isRunning)
         }
-        .foregroundStyle(active ? .green : .orange)
-        .padding(.horizontal, 8).padding(.vertical, 3)
-        .background((active ? Color.green : Color.orange).opacity(0.14), in: Capsule())
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.bar)
+    }
+}
+
+/// Estado da captura do interlocutor. Clicável quando falta permissão.
+private struct CaptureBadge: View {
+    let active: Bool
+    let fix: () -> Void
+
+    var body: some View {
+        Button(action: { if !active { fix() } }) {
+            HStack(spacing: 4) {
+                Image(systemName: active ? "headphones" : "exclamationmark.triangle.fill")
+                    .font(.system(size: 10))
+                Text(active ? "Interlocutor" : "Só você — corrigir")
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .foregroundStyle(active ? .green : .orange)
+            .padding(.horizontal, 7).padding(.vertical, 3)
+            .background((active ? Color.green : Color.orange).opacity(0.14), in: Capsule())
+        }
+        .buttonStyle(.plain)
         .help(active
               ? "Capturando o áudio do interlocutor (sistema)."
-              : "Sem áudio de sistema — aprove 'Screen & System Audio Recording' em Ajustes p/ ouvir o interlocutor.")
+              : "Sem áudio de sistema. Clique pra abrir Ajustes → Gravação de Tela e Áudio do Sistema, aprove o LiveCopilot e reinicie a sessão.")
     }
 }

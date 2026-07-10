@@ -80,16 +80,6 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
         guard !micRunning else { return }
         let input = engine.inputNode
 
-        // Cancelamento de eco acústico (AEC): remove do mic o áudio que sai pelos
-        // alto-falantes (a voz do interlocutor). Assim, mesmo SEM fones, o mic capta
-        // só o usuário e a diarização por origem continua correta.
-        do {
-            try input.setVoiceProcessingEnabled(true)
-            log.info("Voice processing (AEC) ativado no mic")
-        } catch {
-            log.error("AEC indisponível, seguindo sem: \(error.localizedDescription, privacy: .public)")
-        }
-
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0 else {
             throw CaptureError.noMicFormat

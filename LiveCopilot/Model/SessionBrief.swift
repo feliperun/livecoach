@@ -54,6 +54,7 @@ struct SessionBrief: Codable, Sendable, Equatable {
     var goal: String
     var details: String
     var keyterms: [String]
+    var cv: String?                // currículo completo (modo entrevista) — opcional
 
     static let `default` = SessionBrief(
         mode: .interview,
@@ -61,7 +62,8 @@ struct SessionBrief: Codable, Sendable, Equatable {
         nativeLang: "pt-BR",
         goal: "Ir bem na entrevista e demonstrar senioridade técnica.",
         details: "Vaga de engenharia. Destacar autonomia ponta a ponta. Evitar falar mal de empregadores.",
-        keyterms: ["end-to-end ownership", "technical growth", "scope"]
+        keyterms: ["end-to-end ownership", "technical growth", "scope"],
+        cv: nil
     )
 
     /// true quando a conversa acontece em idioma diferente do nativo (mostra tradução).

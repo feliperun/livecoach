@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import AppKit
 
 /// Estado observável da UI. Só leitura pela view; as raias empurram atualizações
 /// pelo `@MainActor`. Comandos delegam ao `SessionCoordinator`.
@@ -22,6 +23,15 @@ final class AppModel {
     var backendAvailable: Bool             // Claude Code CLI encontrado?
     var systemCaptureActive: Bool = false  // ScreenCaptureKit capturando o interlocutor?
 
+    // UI compacta
+    var pinned: Bool = false {             // janela sempre no topo
+        didSet { applyPinned() }
+    }
+    var showTranscript: Bool = false
+    var showSummary: Bool = false
+    var showSettings: Bool = false
+    var currentQuestionID: UUID?           // última pergunta/deixa do interlocutor
+
     private var coordinator: SessionCoordinator?
 
     init() {
@@ -42,6 +52,12 @@ final class AppModel {
         case .paused: return "Pausado"
         case .error(let m): return "Erro: \(m)"
         }
+    }
+
+    /// Última pergunta destacada no topo (deriva do transcript pra receber tradução).
+    var currentQuestion: TranscriptLine? {
+        guard let id = currentQuestionID else { return nil }
+        return transcript.first(where: { $0.id == id })
     }
 
     // MARK: - Comandos
@@ -78,6 +94,18 @@ final class AppModel {
         backendAvailable = ClaudeClient().isAvailable
     }
 
+    /// Abre o painel de Gravação de Tela (pro áudio do interlocutor).
+    func openScreenRecordingSettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!
+        NSWorkspace.shared.open(url)
+    }
+
+    private func applyPinned() {
+        for window in NSApplication.shared.windows where window.isVisible {
+            window.level = pinned ? .floating : .normal
+        }
+    }
+
     // MARK: - Aplicação de eventos (chamado pelo coordinator, já no MainActor)
 
     /// Insere/atualiza a linha e devolve o id da linha afetada.
@@ -103,14 +131,22 @@ final class AppModel {
         return id
     }
 
+    /// Remove uma linha (dedup de eco: fala do interlocutor que vazou pro mic).
+    func removeLine(id: UUID) {
+        transcript.removeAll { $0.id == id }
+        if currentQuestionID == id { currentQuestionID = nil }
+    }
+
+    /// Descarta a linha parcial pendente de um locutor (eco detectado no final).
+    func dropUnfinalized(speaker: Speaker) {
+        if let idx = transcript.lastIndex(where: { !$0.isFinal && $0.speaker == speaker }) {
+            transcript.remove(at: idx)
+        }
+    }
+
     func setTranslation(lineID: UUID, translation: String) {
         guard let idx = transcript.firstIndex(where: { $0.id == lineID }) else { return }
         transcript[idx].translation = translation
-    }
-
-    /// Encontra a última linha final de um locutor (para anexar tradução).
-    func lastFinalLineID(speaker: Speaker, matching text: String) -> UUID? {
-        transcript.last(where: { $0.speaker == speaker && $0.isFinal && $0.text == text })?.id
     }
 
     func upsertCoach(_ card: CoachCard) {

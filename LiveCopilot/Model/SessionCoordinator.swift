@@ -25,6 +25,12 @@ final class SessionCoordinator {
     private var tasks: [Task<Void, Never>] = []
     private var coachTask: Task<Void, Never>?
 
+    // Dedup de eco (setup alto-falante): a fala do interlocutor sai da caixa e volta
+    // pelo mic. Guardamos finais recentes de cada lado e derrubamos duplicatas.
+    private var recentSystemFinals: [(text: String, ts: Date)] = []
+    private var recentMicFinals: [(id: UUID, text: String, ts: Date)] = []
+    private let echoWindow: TimeInterval = 8
+
     init(app: AppModel) {
         self.app = app
     }
@@ -168,14 +174,86 @@ final class SessionCoordinator {
         Task { [weak self] in
             for await event in events {
                 guard let self else { break }
-                await self.bus.publish(event)
-                let lineID = self.app.upsertLine(event)
-
                 if event.isFinal {
-                    self.translate(event: event, lineID: lineID)
+                    await self.handleFinal(event)
+                } else {
+                    self.app.upsertLine(event)
                 }
             }
         }
+    }
+
+    private func handleFinal(_ event: TranscriptEvent) async {
+        purgeEchoBuffers()
+
+        switch event.speaker {
+        case .other:
+            // Registra pra derrubar o eco que chegar pelo mic; remove eco que já chegou.
+            recentSystemFinals.append((event.text, Date()))
+            if let dupe = recentMicFinals.first(where: { Self.isEcho($0.text, event.text) }) {
+                app.removeLine(id: dupe.id)
+                recentMicFinals.removeAll { $0.id == dupe.id }
+            }
+            await bus.publish(event)
+            let lineID = app.upsertLine(event)
+            app.currentQuestionID = lineID          // pergunta/deixa mais recente no topo
+            translate(event: event, lineID: lineID)
+
+        case .self:
+            // Eco da caixa de som? (interlocutor já transcrito pelo stream de sistema)
+            if recentSystemFinals.contains(where: { Self.isEcho(event.text, $0.text) }) {
+                app.dropUnfinalized(speaker: .self)
+                return
+            }
+            await bus.publish(event)
+            let lineID = app.upsertLine(event)
+            recentMicFinals.append((lineID, event.text, Date()))
+            translate(event: event, lineID: lineID)
+
+            // Mic-only (sem captura de sistema): o interlocutor entra pelo mic como
+            // "self". Se parece pergunta/deixa, destaca e aciona o coach com locutor
+            // incerto — o modelo decide (card ou NADA).
+            if !app.systemCaptureActive, !app.silenceMode, Self.looksLikeQuestion(event.text) {
+                app.currentQuestionID = lineID
+                let window = await bus.window()
+                triggerCoach(window: window, latest: event.text, manual: false, speakerCertain: false)
+            }
+        }
+    }
+
+    private func purgeEchoBuffers() {
+        let cutoff = Date().addingTimeInterval(-echoWindow)
+        recentSystemFinals.removeAll { $0.ts < cutoff }
+        recentMicFinals.removeAll { $0.ts < cutoff }
+    }
+
+    /// Similaridade de contenção entre dois textos (palavras normalizadas).
+    static func isEcho(_ a: String, _ b: String) -> Bool {
+        let wa = normalizedWords(a), wb = normalizedWords(b)
+        guard wa.count >= 3, wb.count >= 3 else { return false }
+        let inter = wa.intersection(wb).count
+        return Double(inter) / Double(min(wa.count, wb.count)) >= 0.75
+    }
+
+    private static func normalizedWords(_ s: String) -> Set<String> {
+        Set(
+            s.lowercased()
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { $0.count > 2 }
+        )
+    }
+
+    /// Heurística barata de "isso parece pergunta/deixa pro usuário?" (mic-only).
+    static func looksLikeQuestion(_ t: String) -> Bool {
+        if t.contains("?") { return true }
+        let lower = t.lowercased()
+        let starters = [
+            "what", "why", "how", "when", "where", "which", "who", "could you",
+            "can you", "tell me", "walk me", "describe", "would you", "do you",
+            "have you", "let's", "o que", "por que", "como", "quando", "onde",
+            "qual", "quem", "me conta", "me fala", "descreva", "você pode",
+        ]
+        return starters.contains { lower.hasPrefix($0) }
     }
 
     private func translate(event: TranscriptEvent, lineID: UUID) {
@@ -207,11 +285,11 @@ final class SessionCoordinator {
     }
 
     /// Cancela o coaching anterior e dispara um novo (por turno).
-    private func triggerCoach(window: [Turn], latest: String, manual: Bool) {
+    private func triggerCoach(window: [Turn], latest: String, manual: Bool, speakerCertain: Bool = true) {
         coachTask?.cancel()
         coachTask = Task { [weak self] in
             guard let self else { return }
-            let stream = self.coachingLane.coach(window: window, latest: latest, manual: manual)
+            let stream = self.coachingLane.coach(window: window, latest: latest, manual: manual, speakerCertain: speakerCertain)
             do {
                 for try await card in stream {
                     if Task.isCancelled { break }

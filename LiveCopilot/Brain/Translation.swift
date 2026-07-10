@@ -23,7 +23,7 @@ final class TranslationLane: @unchecked Sendable {
     /// Traduz uma fala. Retorna nil se não há sessão ou em falha (degrada silencioso).
     func translate(_ text: String) async -> String? {
         guard let session = pick() else { return nil }
-        let result = try? await session.complete(text)
+        let result = try? await session.complete(Prompts.translateUser(text))
         guard let result, !result.isEmpty else { return nil }
         return result
     }
