@@ -18,6 +18,20 @@ enum Mode: String, Codable, CaseIterable, Sendable, Identifiable {
     }
 }
 
+enum CoachModel: String, Codable, CaseIterable, Sendable, Identifiable {
+    case opus
+    case sonnet
+
+    var id: String { rawValue }
+    var cliAlias: String { rawValue }   // "opus" | "sonnet"
+    var label: String {
+        switch self {
+        case .opus: return "Opus (profundo)"
+        case .sonnet: return "Sonnet (rápido)"
+        }
+    }
+}
+
 enum SttSource: String, Codable, CaseIterable, Sendable, Identifiable {
     case native      // SpeechAnalyzer / SpeechTranscriber (on-device)
     case assemblyAI  // reservado (Fase 2)

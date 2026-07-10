@@ -3,10 +3,12 @@ import Foundation
 /// Raia de coaching: Sonnet (ou Opus para input manual "deep"), streaming e cancelável.
 /// Emite `CoachCard` progressivamente conforme o modelo gera.
 final class CoachingLane: Sendable {
-    private let session: ClaudeSession?   // Sonnet (turno ao vivo e input manual)
+    private let live: ClaudeSession?     // modelo escolhido (Opus default) — turno ao vivo
+    private let manualS: ClaudeSession?  // Sonnet — input manual
 
-    init(session: ClaudeSession?) {
-        self.session = session
+    init(live: ClaudeSession?, manual: ClaudeSession?) {
+        self.live = live
+        self.manualS = manual
     }
 
     /// Stream de cards parciais (deltas do CLI). O card final tem `isStreaming = false`.
@@ -17,7 +19,7 @@ final class CoachingLane: Sendable {
         manual: Bool
     ) -> AsyncThrowingStream<CoachCard, Error> {
         AsyncThrowingStream { continuation in
-            guard let session else {
+            guard let session = manual ? (manualS ?? live) : live else {
                 continuation.finish()
                 return
             }
@@ -55,14 +57,11 @@ enum CoachCardParser {
         if trimmed.isEmpty { return nil }
         if trimmed.uppercased().hasPrefix("NADA") { return nil }
 
-        var guide = ""
-        var sayConv: String?
-        var sayNative = ""
         var keyterms: [String] = []
-        var kind: CoachKind = manual ? .manual : .answer
+        let kind: CoachKind = manual ? .manual : .answer
 
         // Acumula por rótulo até o próximo rótulo (campos podem ter múltiplas linhas).
-        let labels = ["GUIA:", "DIGA_CONV:", "DIGA_NATIVE:", "KEYTERMS:", "MODO:"]
+        let labels = ["GUIA:", "DIGA:", "PT:", "KEY:"]
         var current: String?
         var buffers: [String: String] = [:]
 
@@ -81,26 +80,21 @@ enum CoachCardParser {
             buffers[label]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         }
 
-        guide = value("GUIA:")
-        let conv = value("DIGA_CONV:")
-        sayConv = (conv == "-" || conv.isEmpty) ? nil : conv
-        sayNative = value("DIGA_NATIVE:")
+        let guide = value("GUIA:")
+        let conv = value("DIGA:")
+        let sayConv: String? = (conv == "-" || conv.isEmpty) ? nil : conv
+        let sayNative = value("PT:")
 
-        let ktRaw = value("KEYTERMS:")
+        let ktRaw = value("KEY:")
         if ktRaw != "-" && !ktRaw.isEmpty {
             keyterms = ktRaw
-                .split(whereSeparator: { $0 == "·" || $0 == "," || $0 == "\n" })
+                .split(whereSeparator: { $0 == "·" || $0 == "," || $0 == "|" || $0 == "\n" })
                 .map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
         }
 
-        let modo = value("MODO:").lowercased()
-        if modo.contains("correction") { kind = .correction }
-        else if modo.contains("manual") { kind = .manual }
-        else if modo.contains("answer") { kind = .answer }
-
         // Durante streaming, GUIA pode ainda estar vazio — só emite quando há algo útil.
-        if streaming && guide.isEmpty && sayNative.isEmpty { return nil }
+        if streaming && guide.isEmpty && sayConv == nil { return nil }
 
         return CoachCard(
             id: id,

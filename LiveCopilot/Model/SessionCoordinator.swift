@@ -13,9 +13,9 @@ final class SessionCoordinator {
     private let client = ClaudeClient()
 
     // Raias e sessões persistentes (warm), criadas no start() com o brief atual.
-    private var translationLane = TranslationLane(session: nil)
+    private var translationLane = TranslationLane(sessions: [])
     private var summaryLane = SummaryLane(session: nil)
-    private var coachingLane = CoachingLane(session: nil)
+    private var coachingLane = CoachingLane(live: nil, manual: nil)
     private var sessions: [ClaudeSession] = []
 
     private var capture: AudioCapture?
@@ -88,6 +88,7 @@ final class SessionCoordinator {
             app.sessionState = .error(error.localizedDescription)
             return
         }
+        app.systemCaptureActive = capture.isSystemActive
         tasks.append(routeAudio(from: capture))
 
         app.sessionState = .running
@@ -110,9 +111,10 @@ final class SessionCoordinator {
 
         for s in sessions { await s.shutdown() }
         sessions.removeAll()
-        translationLane = TranslationLane(session: nil)
+        translationLane = TranslationLane(sessions: [])
         summaryLane = SummaryLane(session: nil)
-        coachingLane = CoachingLane(session: nil)
+        coachingLane = CoachingLane(live: nil, manual: nil)
+        app.systemCaptureActive = false
         log.info("Sessão parada")
     }
 
@@ -120,17 +122,23 @@ final class SessionCoordinator {
     private func buildBrain(brief: SessionBrief) {
         guard client.isAvailable else { return }
 
-        let translateSession = brief.isForeign
-            ? client.makeSession(model: ClaudeClient.fastModel, system: Prompts.translateSystem(brief: brief))
-            : nil
+        // Tradução: pool (round-robin) só quando a conversa é estrangeira.
+        let translateSessions: [ClaudeSession] = brief.isForeign
+            ? (0..<3).compactMap { _ in
+                client.makeSession(model: ClaudeClient.fastModel, system: Prompts.translateSystem(brief: brief))
+              }
+            : []
         let summarySession = client.makeSession(model: ClaudeClient.fastModel, system: Prompts.summarySystem(brief: brief))
-        let coachSession = client.makeSession(model: ClaudeClient.liveModel, system: Prompts.coachSystem(brief: brief))
+        // Live coach usa o modelo escolhido pelo usuário (Opus default).
+        let coachLive = client.makeSession(model: app.coachModel.cliAlias, system: Prompts.coachSystem(brief: brief))
+        // Input manual sempre Sonnet.
+        let coachManual = client.makeSession(model: ClaudeClient.liveModel, system: Prompts.coachSystem(brief: brief))
 
-        translationLane = TranslationLane(session: translateSession)
+        translationLane = TranslationLane(sessions: translateSessions)
         summaryLane = SummaryLane(session: summarySession)
-        coachingLane = CoachingLane(session: coachSession)
+        coachingLane = CoachingLane(live: coachLive, manual: coachManual)
 
-        sessions = [translateSession, summarySession, coachSession].compactMap { $0 }
+        sessions = (translateSessions + [summarySession, coachLive, coachManual]).compactMap { $0 }
     }
 
     func ask(_ text: String) async {

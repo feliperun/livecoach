@@ -16,18 +16,18 @@ struct CoachingPane: View {
             }
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
+                LazyVStack(alignment: .leading, spacing: 12) {
                     if cards.isEmpty {
-                        Text("As sugestões do coach aparecem aqui quando o interlocutor fala.")
-                            .font(.callout)
+                        Text("As sugestões aparecem aqui quando o interlocutor fala.")
+                            .font(.system(size: 15))
                             .foregroundStyle(.secondary)
-                            .padding(.top, 4)
+                            .padding(.top, 6)
                     }
                     ForEach(Array(cards.enumerated()), id: \.element.id) { idx, card in
                         CoachCardView(card: card, highlighted: idx == 0)
                     }
                 }
-                .padding(12)
+                .padding(14)
             }
         }
     }
@@ -45,76 +45,75 @@ private struct CoachCardView: View {
         }
     }
 
-    private var kindLabel: String {
-        switch card.kind {
-        case .answer: return "Resposta"
-        case .correction: return "Correção"
-        case .manual: return "Manual"
-        }
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Circle().fill(accent).frame(width: 8, height: 8)
-                Text(kindLabel).font(.caption.bold()).foregroundStyle(accent)
-                if card.isStreaming {
-                    ProgressView().controlSize(.small)
-                }
-                Spacer()
+        VStack(alignment: .leading, spacing: 12) {
+            // GUIA — a orientação, grande e escaneável.
+            if !card.guidePT.isEmpty {
+                Text("🎯 \(card.guidePT)")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            if !card.guidePT.isEmpty {
-                Field(label: "GUIA", text: card.guidePT, mono: false)
+            // DIGA — a frase pronta na língua da conversa (o mais importante).
+            if let say = card.sayConversation ?? (card.sayNative.isEmpty ? nil : card.sayNative), !say.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("🗣️").font(.system(size: 20))
+                        Text(say)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(.primary)
+                            .lineSpacing(2)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    // Tradução nativa da frase (vocabulário).
+                    if card.sayConversation != nil, !card.sayNative.isEmpty {
+                        HStack(alignment: .top, spacing: 8) {
+                            Text("💬").font(.system(size: 15))
+                            Text(card.sayNative)
+                                .font(.system(size: 15))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
             }
-            if let conv = card.sayConversation, !conv.isEmpty {
-                Field(label: "DIGA", text: conv, mono: false, emphasize: true)
-            }
-            if !card.sayNative.isEmpty && card.sayConversation != nil {
-                Field(label: "↳", text: card.sayNative, mono: false, secondary: true)
-            } else if !card.sayNative.isEmpty {
-                Field(label: "DIGA", text: card.sayNative, mono: false, emphasize: true)
-            }
+
+            // KEYTERMS — vocabulário-chave.
             if !card.keytermsConversation.isEmpty {
                 HStack(spacing: 6) {
+                    Text("🔑").font(.system(size: 13))
                     ForEach(card.keytermsConversation, id: \.self) { term in
                         Text(term)
-                            .font(.caption)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(accent.opacity(0.15), in: Capsule())
+                            .font(.system(size: 13, weight: .medium))
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(accent.opacity(0.18), in: Capsule())
                     }
                 }
             }
+
+            if card.isStreaming {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("pensando…").font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            }
         }
-        .padding(12)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(highlighted ? accent.opacity(0.08) : Color(nsColor: .controlBackgroundColor))
+            RoundedRectangle(cornerRadius: 14)
+                .fill(highlighted ? accent.opacity(0.10) : Color(nsColor: .controlBackgroundColor))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(accent.opacity(highlighted ? 0.5 : 0.2), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(accent.opacity(highlighted ? 0.55 : 0.2), lineWidth: highlighted ? 2 : 1)
         )
-    }
-}
-
-private struct Field: View {
-    let label: String
-    let text: String
-    var mono: Bool = false
-    var emphasize: Bool = false
-    var secondary: Bool = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.caption2.bold()).foregroundStyle(.secondary)
-            Text(text)
-                .font(emphasize ? .body.weight(.medium) : .callout)
-                .foregroundStyle(secondary ? .secondary : .primary)
-                .textSelection(.enabled)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -123,10 +122,10 @@ private struct MissingCLIBanner: View {
         HStack(spacing: 6) {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
             Text("Claude Code CLI não encontrado — só transcrição. Instale/logue com `claude`.")
-                .font(.caption)
+                .font(.system(size: 12))
             Spacer()
         }
-        .padding(.horizontal, 12).padding(.vertical, 6)
+        .padding(.horizontal, 14).padding(.vertical, 8)
         .background(.orange.opacity(0.12))
     }
 }

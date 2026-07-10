@@ -21,6 +21,9 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
     private var micRunning = false
     private var systemRunning = false
 
+    /// Captura de sistema (interlocutor) ativa? Lido pela UI.
+    var isSystemActive: Bool { systemRunning }
+
     override init() {
         var cont: AsyncStream<AudioChunk>.Continuation!
         self.chunks = AsyncStream(bufferingPolicy: .bufferingNewest(64)) { cont = $0 }
@@ -76,6 +79,17 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
     private func startMic() throws {
         guard !micRunning else { return }
         let input = engine.inputNode
+
+        // Cancelamento de eco acústico (AEC): remove do mic o áudio que sai pelos
+        // alto-falantes (a voz do interlocutor). Assim, mesmo SEM fones, o mic capta
+        // só o usuário e a diarização por origem continua correta.
+        do {
+            try input.setVoiceProcessingEnabled(true)
+            log.info("Voice processing (AEC) ativado no mic")
+        } catch {
+            log.error("AEC indisponível, seguindo sem: \(error.localizedDescription, privacy: .public)")
+        }
+
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0 else {
             throw CaptureError.noMicFormat
@@ -114,6 +128,9 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
 
         let stream = SCStream(filter: filter, configuration: config, delegate: self)
         try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: scQueue)
+        // Alguns setups só entregam áudio se houver também um output de vídeo ativo;
+        // registramos e descartamos os frames (§ ver didOutputSampleBuffer).
+        try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: scQueue)
         try await stream.startCapture()
         self.scStream = stream
         systemRunning = true

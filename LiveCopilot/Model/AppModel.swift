@@ -16,9 +16,11 @@ final class AppModel {
     }
 
     var sttSource: SttSource = .native
+    var coachModel: CoachModel = .opus     // modelo do live coach (crítico)
     var manualInput: String = ""
     var silenceMode: Bool = false          // pausa o coach, mantém transcript
     var backendAvailable: Bool             // Claude Code CLI encontrado?
+    var systemCaptureActive: Bool = false  // ScreenCaptureKit capturando o interlocutor?
 
     private var coordinator: SessionCoordinator?
 
