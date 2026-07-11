@@ -5,8 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+# Nota: o build do app (xcodebuild) roda LOCALMENTE — CueMe exige o SDK do
+# macOS 26 (SpeechAnalyzer/Translation), que os runners do GitHub ainda não têm
+# (macos-latest = Xcode 16 / SDK 15). Quando houver runner macOS 26, adicionar
+# um job `build` com `runs-on: macos-26`. Enquanto isso, o gate de CI é o Sentrux
+# (estrutural, independente de plataforma) + o build local exigido no AGENTS.md.
+
 jobs:
-  # Gate estrutural real (Sentrux) — independente de plataforma, roda no Linux.
   sentrux:
     runs-on: ubuntu-latest
     steps:
@@ -30,17 +35,3 @@ jobs:
       - name: Sentrux gate (sem regressão)
         if: github.event_name == 'pull_request'
         run: sentrux gate .
-
-  # Build do app. CueMe exige o SDK do macOS 26 (SpeechAnalyzer/Translation);
-  # os runners do GitHub ainda não têm — informativo até existir runner macOS 26.
-  build:
-    runs-on: macos-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - name: Select newest Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
-      - name: Build (best-effort até runner macOS 26)
-        run: |
-          xcodebuild -project CueMe.xcodeproj -scheme CueMe \
-            -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO
