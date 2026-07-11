@@ -43,8 +43,8 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
 
     // MARK: - Ciclo de vida
 
-    func start(includeSystem: Bool) async throws {
-        try startMic()
+    func start(includeSystem: Bool, echoCancellation: Bool = false) async throws {
+        try startMic(echoCancellation: echoCancellation)
         if includeSystem {
             do {
                 try await startSystem()
@@ -76,9 +76,26 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
 
     // MARK: - Mic (AVAudioEngine)
 
-    private func startMic() throws {
+    private func startMic(echoCancellation: Bool) throws {
         guard !micRunning else { return }
         let input = engine.inputNode
+
+        // AEC (experimental): remove do mic o áudio dos alto-falantes (voz do
+        // interlocutor). O nó VPIO só PROCESSA se o grafo de render estiver ativo —
+        // por isso conectamos input→mixer com o output MUDO (senão o processo trava,
+        // como no bug anterior). Sem fones, isto evita o eco marcado como "self".
+        if echoCancellation {
+            do {
+                try input.setVoiceProcessingEnabled(true)
+                let mixer = engine.mainMixerNode
+                engine.connect(input, to: mixer, format: input.outputFormat(forBus: 0))
+                mixer.outputVolume = 0            // não tocar o mic de volta (sem feedback)
+                _ = engine.outputNode             // garante o nó de saída no grafo
+                log.info("AEC (voice processing) ativado com grafo duplex")
+            } catch {
+                log.error("AEC indisponível, seguindo sem: \(error.localizedDescription, privacy: .public)")
+            }
+        }
 
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0 else {
@@ -91,7 +108,7 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
         engine.prepare()
         try engine.start()
         micRunning = true
-        log.info("Mic iniciado @ \(format.sampleRate, privacy: .public) Hz")
+        log.info("Mic iniciado @ \(format.sampleRate, privacy: .public) Hz (AEC: \(echoCancellation, privacy: .public))")
     }
 
     // MARK: - Sistema (ScreenCaptureKit)

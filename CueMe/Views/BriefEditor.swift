@@ -45,6 +45,15 @@ struct BriefEditor: View {
                     Picker("Transcrição (STT)", selection: $app.sttSource) {
                         ForEach(SttSource.allCases) { Text($0.label).tag($0) }
                     }
+                    Toggle(isOn: $app.echoCancellation) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Cancelamento de eco (experimental)")
+                            Text("Sem fones: tira a voz do interlocutor do seu mic.")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .disabled(app.isRunning)
                 }
 
                 Section("Objetivo") {

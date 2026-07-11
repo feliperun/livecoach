@@ -96,7 +96,7 @@ final class SessionCoordinator {
         let capture = AudioCapture()
         self.capture = capture
         do {
-            try await capture.start(includeSystem: true)
+            try await capture.start(includeSystem: true, echoCancellation: app.echoCancellation)
         } catch {
             app.sessionState = .error(error.localizedDescription)
             return
