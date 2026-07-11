@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Architecture Decision Records (ADRs) for **livecoach**.
+Architecture Decision Records (ADRs) for **CueMe**.
 
 ## Format
 
@@ -50,3 +50,8 @@ proposed → active → superseded
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions | active |
 | [0002](0002-root-managed-ai-guidance.md) | Root-managed AI guidance files | active |
 | [0003](0003-sentrux-structural-quality-gates.md) | Sentrux structural quality gates | active |
+| [0004](0004-native-macos-swift-app.md) | Native macOS 26 Swift app (no webview/driver) | active |
+| [0005](0005-llm-brain-via-claude-cli.md) | LLM brain via the Claude Code CLI, not the API | active |
+| [0006](0006-on-device-stt-and-translation.md) | On-device STT & translation; LLM for coaching | active |
+| [0007](0007-speaker-by-origin-and-echo-dedup.md) | Speaker by capture origin, with echo dedup | active |
+| [0008](0008-coach-ux-and-context-safety.md) | Coach UX: terse, CV-grounded, leak-guarded | active |

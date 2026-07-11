@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# livecoach pre-commit hook (installed by init-harness via core.hooksPath).
+# CueMe pre-commit hook (installed by init-harness via core.hooksPath).
 # Never bypass with --no-verify; fix the underlying issue instead.
 set -euo pipefail
 

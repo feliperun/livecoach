@@ -1,4 +1,4 @@
-# Sentrux architectural constraints for livecoach.
+# Sentrux architectural constraints for CueMe.
 #
 # Ratchet against the current layout. Tighten thresholds as the codebase grows —
 # never loosen without an ADR (see docs/adr/0003-sentrux-structural-quality-gates.md).

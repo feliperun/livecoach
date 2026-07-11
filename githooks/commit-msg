@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# livecoach commit-msg hook — enforce Conventional Commits.
+# CueMe commit-msg hook — enforce Conventional Commits.
 # release tooling parses these; a wrong type breaks versioning. Don't bypass.
 set -euo pipefail
 

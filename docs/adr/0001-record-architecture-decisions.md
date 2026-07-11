@@ -8,7 +8,7 @@ date: 2026-07-10
 
 ## Context
 
-As livecoach grows with multiple contributors and AI agents, decisions get
+As CueMe grows with multiple contributors and AI agents, decisions get
 scattered across chat history and commit messages, making it hard to know *why*
 the system looks the way it does.
 

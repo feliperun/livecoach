@@ -25,7 +25,7 @@ sentrux gate .            # no structural regression
 
 ```bash
 # Create a worktree for a task (keeps main clean):
-git worktree add ../livecoach-<task> -b <dev>/<issue>-<slug>
+git worktree add ../CueMe-<task> -b <dev>/<issue>-<slug>
 ```
 
 ## Documentation map
