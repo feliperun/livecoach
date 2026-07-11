@@ -54,6 +54,16 @@ struct BriefEditor: View {
                         }
                     }
                     .disabled(app.isRunning)
+
+                    Toggle(isOn: $app.trainingMode) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Modo treino (entrevistador por voz)")
+                            Text("Um entrevistador lê a pauta + CV e faz perguntas por voz, adaptando às suas respostas.")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .disabled(app.isRunning)
                 }
 
                 Section("Objetivo") {

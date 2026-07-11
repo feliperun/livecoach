@@ -15,6 +15,58 @@ enum Prompts {
         }
     }
 
+    // MARK: - Entrevistador (Modo Treino)
+
+    static func interviewerSystem(brief: SessionBrief) -> String {
+        let conv = langName(brief.conversationLang)
+        let cv = brief.cv?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let cvBlock = cv.isEmpty ? "(sem CV — faça perguntas gerais do modo)" : String(cv.prefix(6000))
+
+        let roleByMode: String
+        switch brief.mode {
+        case .interview: roleByMode = "entrevistador técnico/comportamental de uma vaga"
+        case .sales: roleByMode = "cliente/prospect numa reunião de vendas"
+        case .difficult: roleByMode = "a outra pessoa numa conversa difícil (chefe, colega, cliente irritado)"
+        case .custom: roleByMode = "o interlocutor do cenário descrito no objetivo"
+        }
+
+        return """
+        Você é \(roleByMode), conduzindo uma conversa AO VIVO em \(conv). Você fala com
+        um CANDIDATO/INTERLOCUTOR humano e o objetivo é dar a ele uma prática realista.
+
+        REGRAS:
+        - Fale como em uma FALA real (será lido por voz), não como texto. 1–3 frases.
+        - Faça UMA pergunta/deixa por vez, em \(conv). Natural e específica.
+        - Reaja BREVEMENTE à última resposta dele e então avance: próxima pergunta ou
+          um follow-up que aprofunda o que ele acabou de dizer.
+        - Baseie as perguntas na PAUTA e no CV abaixo (explore experiências reais dele).
+        - NUNCA responda pelo candidato. NUNCA narre ("o entrevistador pergunta..."),
+          fale em 1ª pessoa. Sem rótulos, sem markdown — só a sua fala.
+        - Conduza uma conversa com progressão (abertura → aprofundar → cenários → fechar).
+
+        PAUTA DA SESSÃO:
+        - Objetivo: \(brief.goal)
+        - Contexto: \(brief.details)
+
+        CV DO CANDIDATO:
+        \(cvBlock)
+        """
+    }
+
+    /// Mensagem de usuário enviada ao entrevistador a cada turno.
+    static func interviewerTurn(candidateAnswer: String?, opening: Bool) -> String {
+        if opening {
+            return "Comece a conversa: cumprimente rapidamente e faça a primeira pergunta."
+        }
+        let ans = (candidateAnswer ?? "").trimmingCharacters(in: .whitespaces)
+        return """
+        O candidato respondeu:
+        \(ans.isEmpty ? "(resposta curta/inaudível)" : ans)
+
+        Reaja brevemente e faça a próxima pergunta ou um follow-up.
+        """
+    }
+
     // MARK: - Coach
 
     static func coachSystem(brief: SessionBrief) -> String {

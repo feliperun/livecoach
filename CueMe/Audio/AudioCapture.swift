@@ -20,6 +20,7 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
 
     private var micRunning = false
     private var systemRunning = false
+    private var captureOwnProcess = false   // modo treino: captar o TTS do próprio app
 
     /// Captura de sistema (interlocutor) ativa? Lido pela UI.
     var isSystemActive: Bool { systemRunning }
@@ -43,7 +44,8 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
 
     // MARK: - Ciclo de vida
 
-    func start(includeSystem: Bool, echoCancellation: Bool = false) async throws {
+    func start(includeSystem: Bool, echoCancellation: Bool = false, captureOwnProcess: Bool = false) async throws {
+        self.captureOwnProcess = captureOwnProcess
         try startMic(echoCancellation: echoCancellation)
         if includeSystem {
             do {
@@ -125,7 +127,8 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
 
         let config = SCStreamConfiguration()
         config.capturesAudio = true
-        config.excludesCurrentProcessAudio = true   // não capturar o próprio app
+        // No modo treino, capturamos o próprio app (o TTS do entrevistador) como `other`.
+        config.excludesCurrentProcessAudio = !captureOwnProcess
         config.sampleRate = 48_000
         config.channelCount = 1
         // Vídeo mínimo (SCStream exige config de vídeo; mantemos 2x2 e ignoramos frames).

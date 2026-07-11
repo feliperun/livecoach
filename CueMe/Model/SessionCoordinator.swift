@@ -21,6 +21,7 @@ final class SessionCoordinator {
     private var capture: AudioCapture?
     private var micStt: (any SttSession)?
     private var systemStt: (any SttSession)?
+    private var training: TrainingCoordinator?
 
     private var tasks: [Task<Void, Never>] = []
     private var coachTask: Task<Void, Never>?
@@ -96,7 +97,11 @@ final class SessionCoordinator {
         let capture = AudioCapture()
         self.capture = capture
         do {
-            try await capture.start(includeSystem: true, echoCancellation: app.echoCancellation)
+            try await capture.start(
+                includeSystem: true,
+                echoCancellation: app.echoCancellation,
+                captureOwnProcess: app.trainingMode   // capta o TTS do entrevistador como `other`
+            )
         } catch {
             app.sessionState = .error(error.localizedDescription)
             return
@@ -104,8 +109,15 @@ final class SessionCoordinator {
         app.systemCaptureActive = capture.isSystemActive
         tasks.append(routeAudio(from: capture))
 
+        // Modo treino: entrevistador por voz (lê pauta + CV, adapta às respostas).
+        if app.trainingMode, client.isAvailable {
+            let training = TrainingCoordinator(client: client, brief: brief)
+            self.training = training
+            training.start()
+        }
+
         app.sessionState = .running
-        log.info("Sessão iniciada")
+        log.info("Sessão iniciada (treino: \(self.app.trainingMode, privacy: .public))")
     }
 
     func stop() async {
@@ -114,6 +126,8 @@ final class SessionCoordinator {
         for t in tasks { t.cancel() }
         tasks.removeAll()
 
+        training?.stop()
+        training = nil
         capture?.finish()
         capture = nil
         await micStt?.finish()
@@ -214,6 +228,9 @@ final class SessionCoordinator {
             let lineID = app.upsertLine(event)
             recentMicFinals.append((lineID, event.text, Date()))
             if app.brief.isForeign { app.enqueueTranslation(id: lineID, text: event.text) }
+
+            // Modo treino: a resposta do usuário realimenta o entrevistador (follow-up).
+            training?.userSaid(event.text)
 
             // Mic-only (sem captura de sistema): o interlocutor entra pelo mic como
             // "self". Se parece pergunta/deixa, destaca e aciona o coach com locutor

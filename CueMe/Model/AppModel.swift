@@ -20,6 +20,7 @@ final class AppModel {
     var sttSource: SttSource = .native
     var coachModel: CoachModel = .sonnet   // default rápido; Opus disponível no picker
     var echoCancellation: Bool = false     // AEC experimental (sem fones); default off
+    var trainingMode: Bool = false         // entrevistador por voz (teste e2e + prep solo)
     var manualInput: String = ""
     var silenceMode: Bool = false          // pausa o coach, mantém transcript
     var backendAvailable: Bool             // Claude Code CLI encontrado?

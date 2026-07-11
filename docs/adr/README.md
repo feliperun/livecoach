@@ -55,3 +55,4 @@ proposed → active → superseded
 | [0006](0006-on-device-stt-and-translation.md) | On-device STT & translation; LLM for coaching | active |
 | [0007](0007-speaker-by-origin-and-echo-dedup.md) | Speaker by capture origin, with echo dedup | active |
 | [0008](0008-coach-ux-and-context-safety.md) | Coach UX: terse, CV-grounded, leak-guarded | active |
+| [0009](0009-training-mode-voice-interviewer.md) | Training mode: voice interviewer + e2e harness | active |
