@@ -1,15 +1,5 @@
 import SwiftUI
 
-extension String {
-    /// Renderiza **negrito** vindo do tradutor.
-    var markdownAttributed: AttributedString {
-        (try? AttributedString(
-            markdown: self,
-            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        )) ?? AttributedString(self)
-    }
-}
-
 /// Transcript compacto (vive colapsado; abre pra revisar).
 struct TranscriptPane: View {
     @Environment(AppModel.self) private var app
@@ -19,8 +9,13 @@ struct TranscriptPane: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
                     ForEach(app.transcript) { line in
-                        TranscriptRow(line: line, foreign: app.brief.isForeign)
-                            .id(line.id)
+                        TranscriptRow(
+                            line: line,
+                            foreign: app.brief.isForeign,
+                            nativeLang: app.brief.nativeLang,
+                            keyterms: app.brief.keyterms
+                        )
+                        .id(line.id)
                     }
                 }
                 .padding(.horizontal, 4)
@@ -38,6 +33,8 @@ struct TranscriptPane: View {
 private struct TranscriptRow: View {
     let line: TranscriptLine
     let foreign: Bool
+    let nativeLang: String
+    let keyterms: [String]
 
     private var color: Color {
         line.speaker == .self ? Theme.cyan : Theme.violet
@@ -74,9 +71,7 @@ private struct TranscriptRow: View {
 
             if foreign, line.isFinal {
                 if let translation = line.translation, !translation.isEmpty {
-                    Text(translation.markdownAttributed)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
+                    Text(Highlighter.translation(translation, native: nativeLang, keyterms: keyterms, base: 13))
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {

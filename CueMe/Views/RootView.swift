@@ -139,9 +139,7 @@ struct QuestionBanner: View {
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                     if app.brief.isForeign, let t = q.translation, !t.isEmpty {
-                        Text(t.markdownAttributed)
-                            .font(.system(size: 14))
-                            .foregroundStyle(.secondary)
+                        Text(Highlighter.translation(t, native: app.brief.nativeLang, keyterms: app.brief.keyterms, base: 14))
                             .lineLimit(3)
                             .fixedSize(horizontal: false, vertical: true)
                     }
