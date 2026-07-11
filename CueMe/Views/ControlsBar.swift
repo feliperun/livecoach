@@ -25,6 +25,14 @@ struct HeaderBar: View {
 
             Spacer()
 
+            Toggle(isOn: $app.trainingMode) {
+                Image(systemName: app.trainingMode ? "graduationcap.fill" : "graduationcap")
+            }
+            .toggleStyle(.button)
+            .buttonStyle(IconButtonStyle(isOn: app.trainingMode))
+            .disabled(app.isRunning)
+            .help("Modo treino: entrevistador por voz lê a pauta + CV e faz perguntas. Ligue antes de Iniciar.")
+
             Toggle(isOn: $app.pinned) {
                 Image(systemName: app.pinned ? "pin.fill" : "pin")
             }
