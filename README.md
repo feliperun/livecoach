@@ -1,7 +1,7 @@
 # CueMe
 
-[![quality](https://github.com/feliperun/livecoach/actions/workflows/quality.yml/badge.svg)](https://github.com/feliperun/livecoach/actions/workflows/quality.yml)
-[![release-please](https://github.com/feliperun/livecoach/actions/workflows/release-please.yml/badge.svg)](https://github.com/feliperun/livecoach/actions/workflows/release-please.yml)
+[![quality](https://github.com/feliperun/cueme/actions/workflows/quality.yml/badge.svg)](https://github.com/feliperun/cueme/actions/workflows/quality.yml)
+[![release-please](https://github.com/feliperun/cueme/actions/workflows/release-please.yml/badge.svg)](https://github.com/feliperun/cueme/actions/workflows/release-please.yml)
 
 Real-time conversation copilot for macOS — a native SwiftUI app that listens to
 both sides of a live conversation, transcribes and translates on the fly,
