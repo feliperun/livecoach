@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 /// Histórico de sessões (treino e conversa real) — lista → detalhe read-only.
 struct HistoryView: View {
@@ -22,6 +24,15 @@ struct HistoryView: View {
                                 .swipeActions {
                                     Button(role: .destructive) { app.deleteHistory(rec.id) } label: {
                                         Label("Apagar", systemImage: "trash")
+                                    }
+                                }
+                                .contextMenu {
+                                    Button("Copiar JSON", systemImage: "doc.on.doc") {
+                                        NSPasteboard.general.clearContents()
+                                        NSPasteboard.general.setString(rec.prettyJSON, forType: .string)
+                                    }
+                                    Button("Apagar", systemImage: "trash", role: .destructive) {
+                                        app.deleteHistory(rec.id)
                                     }
                                 }
                         }
@@ -78,6 +89,7 @@ private struct HistoryRow: View {
 /// Detalhe read-only: pergunta/coach/transcrição da sessão salva.
 private struct SessionDetailView: View {
     let record: SessionRecord
+    @State private var copied = false
 
     var body: some View {
         ScrollView {
@@ -105,6 +117,33 @@ private struct SessionDetailView: View {
         }
         .background(Theme.background)
         .navigationTitle(record.training ? "Treino" : record.mode.label)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button(copied ? "Copiado ✓" : "Copiar JSON", systemImage: "doc.on.doc") { copyJSON() }
+                    Button("Exportar JSON…", systemImage: "square.and.arrow.down") { exportJSON() }
+                } label: {
+                    Label("Exportar", systemImage: "square.and.arrow.up")
+                }
+            }
+        }
+    }
+
+    private func copyJSON() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(record.prettyJSON, forType: .string)
+        copied = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { copied = false }
+    }
+
+    private func exportJSON() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = record.exportFilename
+        panel.canCreateDirectories = true
+        if panel.runModal() == .OK, let url = panel.url {
+            try? record.prettyJSON.data(using: .utf8)?.write(to: url, options: .atomic)
+        }
     }
 
     private var header: some View {

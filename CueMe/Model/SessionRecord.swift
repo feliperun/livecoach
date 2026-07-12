@@ -55,6 +55,21 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
 
     var turnCount: Int { transcript.filter { $0.isFinal }.count }
     var isForeign: Bool { SessionBrief.baseCode(conversationLang) != SessionBrief.baseCode(nativeLang) }
+
+    /// Nome de arquivo sugerido pra exportação.
+    var exportFilename: String {
+        let stamp = startedAt.formatted(.iso8601.year().month().day().dateSeparator(.dash))
+        return "CueMe-\(training ? "treino" : mode.rawValue)-\(stamp).json"
+    }
+
+    /// JSON legível (pretty) pra copiar/exportar.
+    var prettyJSON: String {
+        let e = JSONEncoder()
+        e.dateEncodingStrategy = .iso8601
+        e.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        guard let data = try? e.encode(self), let s = String(data: data, encoding: .utf8) else { return "{}" }
+        return s
+    }
 }
 
 /// Persistência do histórico — um JSON por sessão em Application Support.
