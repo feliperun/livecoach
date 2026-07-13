@@ -3,10 +3,10 @@ import Foundation
 /// Raia de coaching: Sonnet (ou Opus para input manual "deep"), streaming e cancelável.
 /// Emite `CoachCard` progressivamente conforme o modelo gera.
 final class CoachingLane: Sendable {
-    private let live: ClaudeSession?     // modelo escolhido (Opus default) — turno ao vivo
-    private let manualS: ClaudeSession?  // Sonnet — input manual
+    private let live: (any CoachSession)?     // modelo escolhido (DeepSeek Pro default) — turno ao vivo
+    private let manualS: (any CoachSession)?  // input manual (tier rápido)
 
-    init(live: ClaudeSession?, manual: ClaudeSession?) {
+    init(live: (any CoachSession)?, manual: (any CoachSession)?) {
         self.live = live
         self.manualS = manual
     }

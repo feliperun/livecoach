@@ -16,7 +16,7 @@ final class SessionCoordinator {
     // Tradução saiu da LLM → framework nativo Apple (app.translationPipe). Coach fica livre.
     private var summaryLane = SummaryLane(session: nil)
     private var coachingLane = CoachingLane(live: nil, manual: nil)
-    private var sessions: [ClaudeSession] = []
+    private var sessions: [any CoachSession] = []
 
     private var capture: AudioCapture?
     private var micStt: (any SttSession)?
@@ -161,28 +161,32 @@ final class SessionCoordinator {
         return duration
     }
 
-    /// Cria as sessões persistentes das raias (só se o CLI existir) e as AQUECE.
+    /// Cria as sessões persistentes das raias e as AQUECE. Resumo usa o Claude CLI
+    /// (se existir); o coach usa o backend do modelo escolhido (DeepSeek HTTP ou CLI).
     private func buildBrain(brief: SessionBrief) {
-        guard client.isAvailable else { return }
-
         // Resumo é útil em qualquer modo (inclusive reunião — notas da conversa).
-        let summarySession = client.makeSession(model: ClaudeClient.fastModel, system: Prompts.summarySystem(brief: brief))
-        summaryLane = SummaryLane(session: summarySession)
-        sessions = [summarySession].compactMap { $0 }
+        // Só roda com o Claude CLI presente; sem ele, fica desligado.
+        if client.isAvailable {
+            let summarySession = client.makeSession(model: ClaudeClient.fastModel, system: Prompts.summarySystem(brief: brief))
+            summaryLane = SummaryLane(session: summarySession)
+            sessions = [summarySession].compactMap { $0 }
+        }
 
         // Modo reunião é passivo (tema livre) — o coach não se aplica, não gasta sessão.
         guard !brief.mode.isPassive else { return }
 
-        // Live coach usa o modelo escolhido pelo usuário (Opus default).
-        let coachLive = client.makeSession(model: app.coachModel.cliAlias, system: Prompts.coachSystem(brief: brief))
-        // Input manual sempre Sonnet.
-        let coachManual = client.makeSession(model: ClaudeClient.liveModel, system: Prompts.coachSystem(brief: brief))
+        let coachSystem = Prompts.coachSystem(brief: brief)
+        // Live coach usa o modelo escolhido pelo usuário (DeepSeek Pro default).
+        let coachLive = client.makeCoachSession(model: app.coachModel, system: coachSystem)
+        // Input manual usa o tier rápido do mesmo provedor: DeepSeek Flash ou Sonnet.
+        let manualModel: CoachModel = app.coachModel.isDeepSeek ? .deepseekFlash : .sonnet
+        let coachManual = client.makeCoachSession(model: manualModel, system: coachSystem)
 
         coachingLane = CoachingLane(live: coachLive, manual: coachManual)
         sessions += [coachLive, coachManual].compactMap { $0 }
 
-        // Prewarm: paga o cold start agora, antes da 1ª pergunta. O coach é o crítico
-        // (resumo é background, não vale poluir o histórico dele com aquecimento).
+        // Prewarm: paga cold start / TLS agora, antes da 1ª pergunta. O coach é o
+        // crítico (resumo é background, não vale poluir o histórico dele com aquecimento).
         coachLive?.prewarm()
         coachManual?.prewarm()
     }

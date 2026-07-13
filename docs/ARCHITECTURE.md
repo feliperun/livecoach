@@ -50,8 +50,11 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
 - **Bus/** — `TranscriptBus` actor: fan-out `AsyncStream` + rolling window.
 - **Brain/** — `ClaudeClient` (locates the `claude` CLI), `ClaudeSession`
   (a long-lived `claude -p` streaming-json process, prewarmed, isolated cwd +
-  hooks disabled), `Summary` and `Coaching` lanes, `Prompts` (expert-panel coach
-  persona + per-mode playbooks, see [ADR 0011](adr/0011-expert-coach-persona-and-playbooks.md)).
+  hooks disabled), `DeepSeekSession` (direct DeepSeek HTTP/SSE, stateless,
+  non-thinking; keyed via `DeepSeekCredential` in the Keychain, see
+  [ADR 0013](adr/0013-deepseek-coach-via-direct-api.md)) — both behind the
+  `CoachSession` protocol, `Summary` and `Coaching` lanes, `Prompts` (expert-panel
+  coach persona + per-mode playbooks, see [ADR 0011](adr/0011-expert-coach-persona-and-playbooks.md)).
 - **Model/** — `AppModel` (state + commands), `SessionCoordinator` (wires
   capture → STT → bus → lanes → UI, echo dedup, coach triggering, recording,
   training), `TrainingCoordinator` (voice interviewer for practice/e2e testing),

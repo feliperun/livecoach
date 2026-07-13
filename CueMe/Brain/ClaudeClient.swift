@@ -17,10 +17,22 @@ final class ClaudeClient: Sendable {
     /// CLI encontrado no sistema?
     var isAvailable: Bool { cliPath != nil }
 
-    /// Cria uma sessão persistente para uma raia (system prompt + modelo fixos).
+    /// Cria uma sessão persistente do Claude CLI (system prompt + modelo fixos).
     func makeSession(model: String, system: String) -> ClaudeSession? {
         guard let cliPath else { return nil }
         return ClaudeSession(cliPath: cliPath, model: model, system: system)
+    }
+
+    /// Cria a sessão do coach para o modelo escolhido. DeepSeek fala HTTP direto
+    /// (precisa de API key configurada); os demais tiers usam o Claude CLI.
+    func makeCoachSession(model: CoachModel, system: String) -> (any CoachSession)? {
+        if model.isDeepSeek {
+            guard let key = DeepSeekCredential.apiKey, !key.isEmpty,
+                  let base = URL(string: DeepSeekCredential.baseURL)
+            else { return nil }
+            return DeepSeekSession(model: model.backendModel, system: system, apiKey: key, baseURL: base)
+        }
+        return makeSession(model: model.backendModel, system: system)
     }
 
     /// Localiza o binário `claude`. Tenta caminhos comuns e, por fim, o login shell.

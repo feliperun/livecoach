@@ -18,7 +18,7 @@ final class AppModel {
     }
 
     var sttSource: SttSource = .native
-    var coachModel: CoachModel = .sonnet   // default rápido; Opus disponível no picker
+    var coachModel: CoachModel = .deepseekPro   // default DeepSeek V4 Pro; outros no picker
     var echoCancellation: Bool = false     // AEC experimental (sem fones); default off
     var trainingMode: Bool = false         // entrevistador por voz (teste e2e + prep solo)
     var recordAudio: Bool = true           // grava o áudio original sincronizado (default ligado)
@@ -52,7 +52,7 @@ final class AppModel {
 
     init() {
         self.brief = BriefStore.load()
-        self.backendAvailable = ClaudeClient().isAvailable
+        self.backendAvailable = ClaudeClient().isAvailable || DeepSeekCredential.isConfigured
         translationPipe.onResult = { [weak self] id, text in
             Task { @MainActor in self?.setTranslation(lineID: id, translation: text) }
         }
@@ -167,7 +167,7 @@ final class AppModel {
     }
 
     func refreshBackendStatus() {
-        backendAvailable = ClaudeClient().isAvailable
+        backendAvailable = ClaudeClient().isAvailable || DeepSeekCredential.isConfigured
     }
 
     /// Abre o painel de Gravação de Tela (pro áudio do interlocutor).

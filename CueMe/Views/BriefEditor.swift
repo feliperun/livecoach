@@ -9,6 +9,8 @@ struct BriefEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var importingCV = false
     @State private var importError: String?
+    @State private var deepseekKey = ""
+    @State private var deepseekBaseURL = ""
 
     private let langs = ["pt-BR", "en-US", "es-ES", "fr-FR", "de-DE", "it-IT"]
 
@@ -76,6 +78,26 @@ struct BriefEditor: View {
                     .disabled(app.isRunning)
                 }
 
+                if app.coachModel.isDeepSeek {
+                    Section {
+                        SecureField("API key (sk-…)", text: $deepseekKey)
+                            .textContentType(.password)
+                            .onChange(of: deepseekKey) { _, new in
+                                DeepSeekCredential.setAPIKey(new)
+                            }
+                        TextField("Endpoint", text: $deepseekBaseURL, prompt: Text(DeepSeekCredential.defaultBaseURL))
+                            .onChange(of: deepseekBaseURL) { _, new in
+                                DeepSeekCredential.baseURL = new
+                            }
+                    } header: {
+                        Text("DeepSeek")
+                    } footer: {
+                        Text("A key fica no Keychain do macOS, nunca em disco claro. Deixe o endpoint vazio para usar o oficial.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 if app.brief.mode.isPassive {
                     Section {
                         Label("Neste modo o coach fica desligado — é só transcrição, resumo e gravação, com tema livre.", systemImage: "info.circle")
@@ -129,6 +151,11 @@ struct BriefEditor: View {
             .formStyle(.grouped)
         }
         .frame(width: 560, height: 640)
+        .onAppear {
+            deepseekKey = DeepSeekCredential.apiKey ?? ""
+            let stored = DeepSeekCredential.baseURL
+            deepseekBaseURL = stored == DeepSeekCredential.defaultBaseURL ? "" : stored
+        }
         .fileImporter(
             isPresented: $importingCV,
             allowedContentTypes: [.pdf, .plainText, UTType(filenameExtension: "md") ?? .plainText]

@@ -20,11 +20,14 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
    through. Fans out to subscribers (coach, summary, UI) and keeps the rolling
    window (`[Turn]`) that lanes read for context. Nothing downstream talks to
    STT directly.
-4. **Brain** (`Brain/`) — turns the bus's window into LLM output. `ClaudeClient`
-   resolves the CLI binary; `ClaudeSession` is one warm `claude -p` process per
-   lane; `CoachingLane`/`SummaryLane` wrap a session with a specific prompt
-   (`Prompts.swift`) and parsing (`CoachCardParser`). `TrainingCoordinator` is a
-   sibling brain that *speaks* (via `AVSpeechSynthesizer`) instead of coaching.
+4. **Brain** (`Brain/`) — turns the bus's window into LLM output. A lane holds an
+   `any CoachSession`: either a warm `claude -p` process (`ClaudeSession`) or a
+   direct DeepSeek HTTP/SSE session (`DeepSeekSession`, keyed, non-thinking) —
+   `ClaudeClient.makeCoachSession` picks by the selected `CoachModel`.
+   `CoachingLane`/`SummaryLane` wrap a session with a specific prompt
+   (`Prompts.swift`) and parsing (`CoachCardParser`), backend-agnostic.
+   `TrainingCoordinator` is a sibling brain that *speaks* (via
+   `AVSpeechSynthesizer`) instead of coaching.
 5. **Orchestration** (`Model/SessionCoordinator`) — the only thing that wires
    layers 1–4 together for a live session: starts capture, routes chunks to STT
    and the recorder, triggers the coach on turn-end, applies echo dedup. Lives
@@ -48,7 +51,8 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 | Speech-to-text | `SpeechAnalyzer`/`SpeechTranscriber` in `NativeTranscriber` | On-device, macOS 26 only. |
 | Translation | `Translation` framework via `TranslationPipe` | On-device; `TranslationSession` is non-Sendable, confined via `nonisolated(unsafe)` at the `.translationTask` boundary — don't let it cross actors any other way. |
 | Text-to-speech | `AVSpeechSynthesizer` in `TrainingCoordinator` | Speaks the interviewer's questions in training mode. |
-| LLM brain | Claude Code CLI (`claude -p`, stream-json) via `ClaudeSession` | No API key — reuses the user's own CLI login. See [ADR 0005](adr/0005-llm-brain-via-claude-cli.md). |
+| LLM brain (default) | Claude Code CLI (`claude -p`, stream-json) via `ClaudeSession` | No API key — reuses the user's own CLI login. See [ADR 0005](adr/0005-llm-brain-via-claude-cli.md). |
+| LLM brain (DeepSeek) | Direct DeepSeek HTTP/SSE via `DeepSeekSession` | Opt-in coach models (`deepseek-v4-pro`/`-flash`); API key in Keychain (`DeepSeekCredential`), non-thinking for latency. See [ADR 0013](adr/0013-deepseek-coach-via-direct-api.md). |
 | Word-class tagging | `NaturalLanguage`/`NLTagger` in `Highlighter` | On-device; tiers translated text for fast scanning. |
 | Audio playback | Two `AVAudioPlayer`s in `MeetingPlayer` | Synced via a shared `deviceCurrentTime` anchor, not a mixer graph. |
 | CV import | `PDFKit` in `BriefEditor` | Extracts text from a pasted/imported résumé. |

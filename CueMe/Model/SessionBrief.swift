@@ -24,13 +24,31 @@ enum Mode: String, Codable, CaseIterable, Sendable, Identifiable {
 }
 
 enum CoachModel: String, Codable, CaseIterable, Sendable, Identifiable {
+    case deepseekPro = "deepseek-pro"
+    case deepseekFlash = "deepseek-flash"
     case opus
     case sonnet
 
     var id: String { rawValue }
-    var cliAlias: String { rawValue }   // "opus" | "sonnet"
+
+    /// Modelo passado ao `--model` do CLI. Para DeepSeek é o id do endpoint
+    /// Anthropic-compatível; para Claude, o alias de tier.
+    var backendModel: String {
+        switch self {
+        case .deepseekPro: return "deepseek-v4-pro"
+        case .deepseekFlash: return "deepseek-v4-flash"
+        case .opus: return "opus"
+        case .sonnet: return "sonnet"
+        }
+    }
+
+    /// DeepSeek roda o mesmo CLI apontado para outro endpoint (env override).
+    var isDeepSeek: Bool { self == .deepseekPro || self == .deepseekFlash }
+
     var label: String {
         switch self {
+        case .deepseekPro: return "DeepSeek V4 Pro (profundo)"
+        case .deepseekFlash: return "DeepSeek V4 Flash (rápido)"
         case .opus: return "Opus (profundo)"
         case .sonnet: return "Sonnet (rápido)"
         }
