@@ -71,6 +71,10 @@ private struct HistoryRow: View {
                     Text("· \(record.mode.label)")
                     Text("· \(record.turnCount) turnos")
                     Text("· \(durationText)")
+                    if record.hasAudio {
+                        Image(systemName: "waveform")
+                            .foregroundStyle(Theme.mint)
+                    }
                 }
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
@@ -90,11 +94,18 @@ private struct HistoryRow: View {
 private struct SessionDetailView: View {
     let record: SessionRecord
     @State private var copied = false
+    @State private var player = MeetingPlayer()
+    @State private var envelope: [Float] = []
+    @State private var loadingWaveform = true
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 header
+
+                if record.hasAudio {
+                    WaveformPlayerView(player: player, envelope: envelope, loading: loadingWaveform)
+                }
 
                 if !record.coachCards.isEmpty {
                     section("Coach") {
@@ -110,7 +121,14 @@ private struct SessionDetailView: View {
                     }
                 }
                 section("Transcrição") {
-                    ForEach(record.transcript) { line in SavedLine(line: line, foreign: record.isForeign) }
+                    ForEach(record.transcript) { line in
+                        SavedLine(
+                            line: line,
+                            foreign: record.isForeign,
+                            active: record.hasAudio && line.id == activeLineID,
+                            onTap: record.hasAudio ? { seek(to: line) } : nil
+                        )
+                    }
                 }
             }
             .padding(18)
@@ -127,6 +145,31 @@ private struct SessionDetailView: View {
                 }
             }
         }
+        .task {
+            guard record.hasAudio else { return }
+            let selfURL = MeetingRecording.selfURL(for: record.id)
+            let otherURL = MeetingRecording.otherURL(for: record.id)
+            player.load(selfURL: selfURL, otherURL: otherURL)
+            envelope = await Task.detached(priority: .userInitiated) {
+                WaveformGenerator.envelope(selfURL: selfURL, otherURL: otherURL, buckets: 260)
+            }.value
+            loadingWaveform = false
+        }
+        .onDisappear { player.teardown() }
+    }
+
+    /// Linha da transcrição correspondente ao instante de reprodução atual.
+    private var activeLineID: UUID? {
+        guard player.currentTime > 0 else { return nil }
+        let target = record.startedAt.addingTimeInterval(player.currentTime)
+        return record.transcript
+            .filter { $0.isFinal && $0.ts <= target }
+            .max(by: { $0.ts < $1.ts })?.id
+    }
+
+    private func seek(to line: TranscriptLine) {
+        player.seek(to: line.ts.timeIntervalSince(record.startedAt))
+        if !player.isPlaying { player.play() }
     }
 
     private func copyJSON() {
@@ -188,20 +231,33 @@ private struct SavedCoachCard: View {
 private struct SavedLine: View {
     let line: TranscriptLine
     let foreign: Bool
+    var active: Bool = false
+    var onTap: (() -> Void)? = nil
     private var color: Color { line.speaker == .self ? Theme.cyan : Theme.violet }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(line.speaker.label.uppercased())
-                .font(.system(size: 8.5, weight: .heavy)).foregroundStyle(color)
-            Text(line.text).font(.system(size: 13)).textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-            if foreign, let t = line.translation, !t.isEmpty {
-                Text(t).font(.system(size: 12)).foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: 6) {
+            if onTap != nil {
+                Image(systemName: active ? "speaker.wave.2.fill" : "play.fill")
+                    .font(.system(size: 8))
+                    .foregroundStyle(active ? Theme.mint : .clear)
+                    .frame(width: 10)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(line.speaker.label.uppercased())
+                    .font(.system(size: 8.5, weight: .heavy)).foregroundStyle(color)
+                Text(line.text).font(.system(size: 13)).textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
+                if foreign, let t = line.translation, !t.isEmpty {
+                    Text(t).font(.system(size: 12)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 3)
+        .padding(.vertical, 4).padding(.horizontal, 6)
+        .background(active ? Theme.mint.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 6))
+        .contentShape(Rectangle())
+        .onTapGesture { onTap?() }
     }
 }

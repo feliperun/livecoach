@@ -63,7 +63,25 @@ struct BriefEditor: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .disabled(app.isRunning || app.brief.mode.isPassive)
+
+                    Toggle(isOn: $app.recordAudio) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Gravar áudio da sessão")
+                            Text("Grava os dois lados sincronizados com a transcrição, pra reouvir depois.")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     .disabled(app.isRunning)
+                }
+
+                if app.brief.mode.isPassive {
+                    Section {
+                        Label("Neste modo o coach fica desligado — é só transcrição, resumo e gravação, com tema livre.", systemImage: "info.circle")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Section("Objetivo") {

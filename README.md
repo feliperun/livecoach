@@ -43,9 +43,17 @@ subscription/login), so there's nothing to configure and no key to leak.
 - **Contextual coaching** — the "friend beside you": "they asked X → answer like
   this", a ready-to-say phrase in the conversation language + your native
   translation + key vocabulary. Terse and emoji-cued for reading under pressure.
-- **Session brief** (mode: interview / sales / difficult / custom) with your full
-  **CV/résumé** (paste or import .pdf/.md/.txt) so hints point at your real
-  stories. Plus a manual question box for mid-conversation.
+- **Session brief** (mode: interview / sales / difficult / meeting / custom) with
+  your full **CV/résumé** (paste or import .pdf/.md/.txt) so hints point at your
+  real stories. Plus a manual question box for mid-conversation.
+- **Meeting mode** for free-topic conversations — coaching turns off (it doesn't
+  fit an open agenda) while transcription, translation, and the rolling summary
+  keep running.
+- **Session recording**, on by default — the original audio (both sides) is
+  recorded in sync with the transcript. Revisit any past session in the
+  **history**: a visual waveform player where tapping a transcript line seeks
+  and plays the audio from that moment, and the active line highlights live as
+  it plays back. Sessions can be copied/exported as JSON.
 
 Example (interview in English, native Portuguese):
 
@@ -155,14 +163,18 @@ ScreenCaptureKit (sys) ──┘                                          │
 
 ```
 CueMe/
-├── Audio/    AudioCapture (mic + ScreenCaptureKit, echo dedup), AudioConverter
+├── Audio/    AudioCapture (mic + ScreenCaptureKit, echo dedup), AudioConverter,
+│             MeetingRecorder (synced dual-file recording), MeetingPlayer,
+│             WaveformGenerator
 ├── STT/      SttProvider, NativeTranscriber (SpeechAnalyzer), TranslationPipe
 ├── Bus/      TranscriptBus (actor + fan-out + rolling window)
 ├── Brain/    ClaudeClient (CLI resolver), ClaudeSession (warm process),
 │             Summary / Coaching lanes, Prompts
-├── Model/    AppModel (@Observable), SessionCoordinator, SessionBrief, Types
-└── Views/    RootView, HeaderBar, QuestionBanner, CoachingPane, Transcript,
-              Summary, BriefEditor, Highlighter (NaturalLanguage), Theme
+├── Model/    AppModel (@Observable), SessionCoordinator, SessionBrief,
+│             SessionRecord (history persistence), Types
+└── Views/    RootView, HeaderBar, QuestionBanner, CoachingPane, MeetingPanel,
+              Transcript, Summary, BriefEditor, HistoryView,
+              WaveformPlayerView, Highlighter (NaturalLanguage), Theme
 ```
 
 ---

@@ -21,6 +21,7 @@ final class AppModel {
     var coachModel: CoachModel = .sonnet   // default rápido; Opus disponível no picker
     var echoCancellation: Bool = false     // AEC experimental (sem fones); default off
     var trainingMode: Bool = false         // entrevistador por voz (teste e2e + prep solo)
+    var recordAudio: Bool = true           // grava o áudio original sincronizado (default ligado)
     var manualInput: String = ""
     var silenceMode: Bool = false          // pausa o coach, mantém transcript
     var backendAvailable: Bool             // Claude Code CLI encontrado?
@@ -39,6 +40,8 @@ final class AppModel {
     // Histórico de sessões.
     var history: [SessionRecord] = []
     private var sessionStartedAt: Date?
+    var sessionStartTime: Date? { sessionStartedAt }
+    private(set) var currentSessionID: UUID?
 
     /// Tradução nativa on-device: config observável aqui, loop no pipe (Sendable).
     /// A RootView pluga `.translationTask(translationConfig)`.
@@ -106,25 +109,29 @@ final class AppModel {
         summaryBullets = []
         currentQuestionID = nil
         sessionStartedAt = Date()
+        currentSessionID = UUID()
         let coord = SessionCoordinator(app: self)
         self.coordinator = coord
         Task { await coord.start() }
     }
 
     func stop() {
-        saveSessionRecord()
-        Task { [coordinator] in
-            await coordinator?.stop()
-        }
+        let coord = coordinator
         coordinator = nil
         sessionState = .idle
+        Task { @MainActor in
+            let duration = await coord?.stop()
+            self.saveSessionRecord(audioDuration: duration)
+        }
     }
 
     /// Salva a sessão atual no histórico (se teve conteúdo).
-    private func saveSessionRecord() {
+    private func saveSessionRecord(audioDuration: TimeInterval?) {
+        defer { sessionStartedAt = nil; currentSessionID = nil }
         guard let startedAt = sessionStartedAt,
-              !transcript.isEmpty || !coachCards.isEmpty else { sessionStartedAt = nil; return }
+              !transcript.isEmpty || !coachCards.isEmpty else { return }
         let record = SessionRecord(
+            id: currentSessionID ?? UUID(),
             startedAt: startedAt,
             mode: brief.mode,
             training: trainingMode,
@@ -133,11 +140,12 @@ final class AppModel {
             goal: brief.goal,
             transcript: transcript,
             coachCards: coachCards.map { var c = $0; c.isStreaming = false; return c },
-            summaryBullets: summaryBullets
+            summaryBullets: summaryBullets,
+            hasAudio: audioDuration != nil,
+            audioDuration: audioDuration ?? 0
         )
         SessionStore.save(record)
         history.insert(record, at: 0)
-        sessionStartedAt = nil
     }
 
     func deleteHistory(_ id: UUID) {

@@ -58,3 +58,4 @@ proposed → active → superseded
 | [0009](0009-training-mode-voice-interviewer.md) | Training mode: voice interviewer + e2e harness | active |
 | [0010](0010-on-device-translation-highlighting.md) | On-device translation highlighting (tiered) | active |
 | [0011](0011-expert-coach-persona-and-playbooks.md) | Expert coach persona + per-mode playbooks | active |
+| [0012](0012-meeting-mode-and-synced-recording.md) | Meeting mode + timestamp-synced audio recording | active |

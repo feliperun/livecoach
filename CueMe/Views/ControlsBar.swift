@@ -21,6 +21,9 @@ struct HeaderBar: View {
                 CaptureBadge(active: app.systemCaptureActive) {
                     app.openScreenRecordingSettings()
                 }
+                if app.recordAudio {
+                    RecDot()
+                }
             }
 
             Spacer()
@@ -124,6 +127,20 @@ struct InputBar: View {
 }
 
 /// Estado da captura do interlocutor. Clicável quando falta permissão.
+/// Indicador discreto de que o áudio original está sendo gravado.
+private struct RecDot: View {
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle().fill(Theme.rose).frame(width: 6, height: 6)
+            Text("REC").font(.system(size: 9.5, weight: .heavy, design: .rounded))
+        }
+        .foregroundStyle(Theme.rose)
+        .padding(.horizontal, 7).padding(.vertical, 3)
+        .background(Theme.rose.opacity(0.13), in: Capsule())
+        .help("Gravando o áudio original desta sessão.")
+    }
+}
+
 private struct CaptureBadge: View {
     let active: Bool
     let fix: () -> Void

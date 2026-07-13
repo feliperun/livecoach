@@ -27,6 +27,7 @@ enum Prompts {
         case .interview: roleByMode = "entrevistador técnico/comportamental de uma vaga"
         case .sales: roleByMode = "cliente/prospect numa reunião de vendas"
         case .difficult: roleByMode = "a outra pessoa numa conversa difícil (chefe, colega, cliente irritado)"
+        case .meeting: roleByMode = "um participante numa reunião de trabalho"
         case .custom: roleByMode = "o interlocutor do cenário descrito no objetivo"
         }
 
@@ -177,6 +178,10 @@ enum Prompts {
             • Firmeza empática: mantenha o limite sem atacar; nomeie o que precisa acontecer.
             • Se subir o tom → respire, reduza o ritmo, reconheça, redirecione ao fato.
             """
+        case .meeting:
+            // Modo passivo — o coach não roda neste modo (ver isPassive); mantido só
+            // pra exaustividade do switch.
+            return ""
         case .custom:
             return """
             PLAYBOOK: siga o OBJETIVO do brief. Diagnostique o que o interlocutor busca e

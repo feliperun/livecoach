@@ -4,6 +4,7 @@ enum Mode: String, Codable, CaseIterable, Sendable, Identifiable {
     case interview
     case sales
     case difficult
+    case meeting
     case custom
 
     var id: String { rawValue }
@@ -13,9 +14,13 @@ enum Mode: String, Codable, CaseIterable, Sendable, Identifiable {
         case .interview: return "Entrevista"
         case .sales: return "Vendas"
         case .difficult: return "Conversa difícil"
+        case .meeting: return "Gravar reunião"
         case .custom: return "Custom"
         }
     }
+
+    /// Modo de captura/transcrição pura — o coach fica de fora.
+    var isPassive: Bool { self == .meeting }
 }
 
 enum CoachModel: String, Codable, CaseIterable, Sendable, Identifiable {

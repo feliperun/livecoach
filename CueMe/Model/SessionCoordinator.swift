@@ -22,6 +22,7 @@ final class SessionCoordinator {
     private var micStt: (any SttSession)?
     private var systemStt: (any SttSession)?
     private var training: TrainingCoordinator?
+    private var recorder: MeetingRecorder?
 
     private var tasks: [Task<Void, Never>] = []
     private var coachTask: Task<Void, Never>?
@@ -109,6 +110,17 @@ final class SessionCoordinator {
         app.systemCaptureActive = capture.isSystemActive
         tasks.append(routeAudio(from: capture))
 
+        // Gravação do áudio original, sincronizada com a transcrição (opt-out).
+        if app.recordAudio, let sessionID = app.currentSessionID {
+            let rec = MeetingRecorder()
+            do {
+                try await rec.start(directory: MeetingRecording.directory(for: sessionID))
+                self.recorder = rec
+            } catch {
+                log.error("Falha ao iniciar gravação: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+
         // Modo treino: entrevistador por voz (lê pauta + CV, adapta às respostas).
         if app.trainingMode, client.isAvailable {
             let training = TrainingCoordinator(client: client, brief: brief)
@@ -120,7 +132,8 @@ final class SessionCoordinator {
         log.info("Sessão iniciada (treino: \(self.app.trainingMode, privacy: .public))")
     }
 
-    func stop() async {
+    /// Para a sessão e devolve a duração gravada (nil se não gravou nada).
+    func stop() async -> TimeInterval? {
         coachTask?.cancel()
         coachTask = nil
         for t in tasks { t.cancel() }
@@ -135,6 +148,8 @@ final class SessionCoordinator {
         micStt = nil
         systemStt = nil
         await bus.finish()
+        let duration = await recorder?.stop()
+        recorder = nil
 
         for s in sessions { await s.shutdown() }
         sessions.removeAll()
@@ -143,22 +158,28 @@ final class SessionCoordinator {
         app.stopTranslation()
         app.systemCaptureActive = false
         log.info("Sessão parada")
+        return duration
     }
 
     /// Cria as sessões persistentes das raias (só se o CLI existir) e as AQUECE.
     private func buildBrain(brief: SessionBrief) {
         guard client.isAvailable else { return }
 
+        // Resumo é útil em qualquer modo (inclusive reunião — notas da conversa).
         let summarySession = client.makeSession(model: ClaudeClient.fastModel, system: Prompts.summarySystem(brief: brief))
+        summaryLane = SummaryLane(session: summarySession)
+        sessions = [summarySession].compactMap { $0 }
+
+        // Modo reunião é passivo (tema livre) — o coach não se aplica, não gasta sessão.
+        guard !brief.mode.isPassive else { return }
+
         // Live coach usa o modelo escolhido pelo usuário (Opus default).
         let coachLive = client.makeSession(model: app.coachModel.cliAlias, system: Prompts.coachSystem(brief: brief))
         // Input manual sempre Sonnet.
         let coachManual = client.makeSession(model: ClaudeClient.liveModel, system: Prompts.coachSystem(brief: brief))
 
-        summaryLane = SummaryLane(session: summarySession)
         coachingLane = CoachingLane(live: coachLive, manual: coachManual)
-
-        sessions = [summarySession, coachLive, coachManual].compactMap { $0 }
+        sessions += [coachLive, coachManual].compactMap { $0 }
 
         // Prewarm: paga o cold start agora, antes da 1ª pergunta. O coach é o crítico
         // (resumo é background, não vale poluir o histórico dele com aquecimento).
@@ -183,6 +204,7 @@ final class SessionCoordinator {
                 case .self:  await self.micStt?.feed(chunk.buffer)
                 case .other: await self.systemStt?.feed(chunk.buffer)
                 }
+                await self.recorder?.ingest(chunk)
             }
         }
     }
@@ -235,7 +257,7 @@ final class SessionCoordinator {
             // Mic-only (sem captura de sistema): o interlocutor entra pelo mic como
             // "self". Se parece pergunta/deixa, destaca e aciona o coach com locutor
             // incerto — o modelo decide (card ou NADA).
-            if !app.systemCaptureActive, !app.silenceMode, Self.looksLikeQuestion(event.text) {
+            if !app.systemCaptureActive, !app.silenceMode, !app.brief.mode.isPassive, Self.looksLikeQuestion(event.text) {
                 app.currentQuestionID = lineID
                 let window = await bus.window()
                 triggerCoach(window: window, latest: event.text, manual: false, speakerCertain: false)
@@ -285,7 +307,7 @@ final class SessionCoordinator {
             guard let self else { return }
             let stream = await self.bus.subscribe()
             for await event in stream {
-                guard !self.app.silenceMode else { continue }
+                guard !self.app.silenceMode, !self.app.brief.mode.isPassive else { continue }
                 // Gatilho: interlocutor terminou um turno.
                 if event.speaker == .other, event.isFinal, event.isEndOfTurn {
                     let window = await self.bus.window()

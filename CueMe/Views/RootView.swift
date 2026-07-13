@@ -15,15 +15,22 @@ struct RootView: View {
         VStack(spacing: 0) {
             HeaderBar()
 
-            QuestionBanner()
-                .padding(.horizontal, 12)
-                .padding(.top, 10)
+            if app.brief.mode.isPassive {
+                MeetingPanel()
+                    .frame(maxHeight: .infinity)
+            } else {
+                QuestionBanner()
+                    .padding(.horizontal, 12)
+                    .padding(.top, 10)
 
-            CoachingPane()
-                .frame(maxHeight: .infinity)
+                CoachingPane()
+                    .frame(maxHeight: .infinity)
+            }
 
             CollapsiblePanels()
-            InputBar()
+            if !app.brief.mode.isPassive {
+                InputBar()
+            }
         }
         .background(Theme.background.ignoresSafeArea())
         .preferredColorScheme(.dark)

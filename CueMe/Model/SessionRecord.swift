@@ -16,6 +16,8 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
     var transcript: [TranscriptLine]
     var coachCards: [CoachCard]
     var summaryBullets: [String]
+    var hasAudio: Bool
+    var audioDuration: TimeInterval
 
     init(
         id: UUID = UUID(),
@@ -28,7 +30,9 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         goal: String,
         transcript: [TranscriptLine],
         coachCards: [CoachCard],
-        summaryBullets: [String]
+        summaryBullets: [String],
+        hasAudio: Bool = false,
+        audioDuration: TimeInterval = 0
     ) {
         self.id = id
         self.startedAt = startedAt
@@ -41,6 +45,26 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         self.transcript = transcript
         self.coachCards = coachCards
         self.summaryBullets = summaryBullets
+        self.hasAudio = hasAudio
+        self.audioDuration = audioDuration
+    }
+
+    /// Decode tolerante: sessões salvas antes do gravador não têm hasAudio/audioDuration.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        startedAt = try c.decode(Date.self, forKey: .startedAt)
+        endedAt = try c.decode(Date.self, forKey: .endedAt)
+        mode = try c.decode(Mode.self, forKey: .mode)
+        training = try c.decode(Bool.self, forKey: .training)
+        conversationLang = try c.decode(String.self, forKey: .conversationLang)
+        nativeLang = try c.decode(String.self, forKey: .nativeLang)
+        goal = try c.decode(String.self, forKey: .goal)
+        transcript = try c.decode([TranscriptLine].self, forKey: .transcript)
+        coachCards = try c.decode([CoachCard].self, forKey: .coachCards)
+        summaryBullets = try c.decode([String].self, forKey: .summaryBullets)
+        hasAudio = try c.decodeIfPresent(Bool.self, forKey: .hasAudio) ?? false
+        audioDuration = try c.decodeIfPresent(TimeInterval.self, forKey: .audioDuration) ?? 0
     }
 
     var duration: TimeInterval { max(0, endedAt.timeIntervalSince(startedAt)) }
@@ -106,5 +130,6 @@ enum SessionStore {
 
     static func delete(_ id: UUID) {
         try? FileManager.default.removeItem(at: dir().appendingPathComponent("\(id.uuidString).json"))
+        MeetingRecording.delete(for: id)
     }
 }
