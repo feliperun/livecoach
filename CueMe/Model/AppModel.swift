@@ -18,7 +18,10 @@ final class AppModel {
     }
 
     var sttSource: SttSource = .native
-    var coachModel: CoachModel = .deepseekPro   // default DeepSeek V4 Pro; outros no picker
+    var coachModel: CoachModel = .deepseekPro {   // default DeepSeek V4 Pro; persiste entre sessões
+        didSet { UserDefaults.standard.set(coachModel.rawValue, forKey: Self.coachModelKey) }
+    }
+    private static let coachModelKey = "coachModel"
     var echoCancellation: Bool = false     // AEC experimental (sem fones); default off
     var trainingMode: Bool = false         // entrevistador por voz (teste e2e + prep solo)
     var recordAudio: Bool = true           // grava o áudio original sincronizado (default ligado)
@@ -52,6 +55,10 @@ final class AppModel {
 
     init() {
         self.brief = BriefStore.load()
+        if let raw = UserDefaults.standard.string(forKey: Self.coachModelKey),
+           let saved = CoachModel(rawValue: raw) {
+            self.coachModel = saved
+        }
         self.backendAvailable = ClaudeClient().isAvailable || DeepSeekCredential.isConfigured
         translationPipe.onResult = { [weak self] id, text in
             Task { @MainActor in self?.setTranslation(lineID: id, translation: text) }
@@ -122,6 +129,23 @@ final class AppModel {
         Task { @MainActor in
             let duration = await coord?.stop()
             self.saveSessionRecord(audioDuration: duration)
+        }
+    }
+
+    /// Encerra a sessão atual (salva no histórico) e começa uma nova, limpa.
+    /// Um clique só: sem precisar Parar → Iniciar.
+    func newSession() {
+        guard isRunning || sessionState == .preparing else {
+            start()   // ocioso: start() já limpa os painéis
+            return
+        }
+        let coord = coordinator
+        coordinator = nil
+        sessionState = .idle
+        Task { @MainActor in
+            let duration = await coord?.stop()
+            self.saveSessionRecord(audioDuration: duration)
+            self.start()
         }
     }
 

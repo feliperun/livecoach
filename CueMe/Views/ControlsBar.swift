@@ -67,6 +67,18 @@ struct HeaderBar: View {
             .help("Brief da sessão: modo, idiomas, modelo, CV")
             .disabled(app.isRunning)
 
+            if app.isRunning || !app.transcript.isEmpty || !app.coachCards.isEmpty {
+                Button {
+                    app.newSession()
+                } label: {
+                    Image(systemName: "plus.circle")
+                }
+                .buttonStyle(IconButtonStyle())
+                .help("Nova sessão: encerra a atual (salva no histórico) e começa uma limpa")
+                .keyboardShortcut("n", modifiers: [.command])
+                .disabled(app.sessionState == .preparing)
+            }
+
             Button(app.isRunning ? "Parar" : "Iniciar") {
                 app.isRunning ? app.stop() : app.start()
             }
