@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.0](https://github.com/feliperun/cueme/compare/v0.4.0...v0.5.0) (2026-07-13)
+
+
+### Features
+
+* DeepSeek V4 coach (Pro/Flash) + new-session UX ([78408a9](https://github.com/feliperun/cueme/commit/78408a9cf5b52a69b944eb0173bb092f0af24002))
+* DeepSeek V4 coach via direct API (Pro/Flash) ([7ef902c](https://github.com/feliperun/cueme/commit/7ef902cfb9163f8547c1730b1634a13aaf5356d4))
+* persist coach model + "New session" one-click restart ([2cc7580](https://github.com/feliperun/cueme/commit/2cc75802cad24c299d99cd36dab420d500b1eec2))
+
 ## [0.4.0](https://github.com/feliperun/cueme/compare/v0.3.0...v0.4.0) (2026-07-13)
 
 
