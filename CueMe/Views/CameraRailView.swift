@@ -4,6 +4,7 @@ import SwiftUI
 /// controls, or paragraphs: one prompt and one actionable visual cue.
 struct CameraRailView: View {
     @Environment(AppModel.self) private var app
+    @State private var contentMode: RailContentMode = .phrase
 
     private var phrase: String? {
         guard let card = app.activeCoachCard else { return nil }
@@ -15,12 +16,24 @@ struct CameraRailView: View {
         return value
     }
 
+    private var anchors: String? {
+        guard let terms = app.activeCoachCard?.keytermsConversation, !terms.isEmpty else { return nil }
+        return terms.prefix(3).joined(separator: "  ·  ")
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             Circle()
-                .fill(app.isRunning ? Theme.mint : Color.secondary)
+                .fill(app.isRunning ? healthColor : Color.secondary)
                 .frame(width: 8, height: 8)
-            if let phrase {
+            if contentMode == .structure, let guide {
+                VisualGuide(text: guide)
+            } else if contentMode == .anchors, let anchors {
+                Text(anchors.uppercased())
+                    .font(.system(size: 13, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Theme.cyan)
+                    .lineLimit(1)
+            } else if let phrase {
                 Text(phrase)
                     .font(.system(size: 17, weight: .bold, design: .rounded))
                     .lineLimit(2)
@@ -38,12 +51,38 @@ struct CameraRailView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
+            Button { contentMode = contentMode.next } label: {
+                Image(systemName: contentMode.icon)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("r", modifiers: [.option])
+            .help("Alternar frase, estrutura e palavras-chave")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .frame(width: 560, height: 74)
         .background(Theme.background.opacity(0.96))
         .preferredColorScheme(.dark)
+    }
+
+    private var healthColor: Color {
+        switch app.runtimeHealth.level {
+        case .healthy: return Theme.mint
+        case .degraded: return Theme.amber
+        case .critical: return Theme.rose
+        }
+    }
+}
+
+private enum RailContentMode {
+    case phrase, structure, anchors
+    var next: Self {
+        switch self { case .phrase: return .structure; case .structure: return .anchors; case .anchors: return .phrase }
+    }
+    var icon: String {
+        switch self { case .phrase: return "text.quote"; case .structure: return "point.3.connected.trianglepath.dotted"; case .anchors: return "key.fill" }
     }
 }
 

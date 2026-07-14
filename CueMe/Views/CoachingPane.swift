@@ -36,6 +36,7 @@ struct CoachingPane: View {
 
 /// Card principal: **o que dizer AGORA** é o herói (maior). GUIA é contexto curto.
 private struct HeroCard: View {
+    @Environment(AppModel.self) private var app
     let card: CoachCard
     let convLang: String
     let keyterms: [String]
@@ -97,6 +98,19 @@ private struct HeroCard: View {
                     Text("refinando…").font(.system(size: 10)).foregroundStyle(.tertiary)
                 }
             }
+            if !card.isStreaming, card.hasContent {
+                HStack(spacing: 6) {
+                    Spacer()
+                    FeedbackButton(
+                        icon: "hand.thumbsup",
+                        selected: app.coachFeedback[card.id] == .helpful
+                    ) { app.setCoachFeedback(cardID: card.id, feedback: .helpful) }
+                    FeedbackButton(
+                        icon: "hand.thumbsdown",
+                        selected: app.coachFeedback[card.id] == .notHelpful
+                    ) { app.setCoachFeedback(cardID: card.id, feedback: .notHelpful) }
+                }
+            }
         }
         .padding(13)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -113,6 +127,22 @@ private struct HeroCard: View {
         var a = AttributedString(say)
         a.font = .system(size: 23, weight: .bold, design: .rounded)
         return a
+    }
+}
+
+private struct FeedbackButton: View {
+    let icon: String
+    let selected: Bool
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: selected ? "\(icon).fill" : icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(selected ? Theme.mint : Color.secondary.opacity(0.65))
+                .frame(width: 24, height: 20)
+                .background(Color.white.opacity(selected ? 0.08 : 0.03), in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 

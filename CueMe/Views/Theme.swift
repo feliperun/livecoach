@@ -61,26 +61,35 @@ extension View {
 /// Dot de status com pulso quando ativo.
 struct PulseDot: View {
     let active: Bool
+    var health: RuntimeHealthLevel = .healthy
     @State private var pulse = false
 
     var body: some View {
         ZStack {
             if active {
                 Circle()
-                    .fill(Theme.mint.opacity(0.35))
+                    .fill(color.opacity(0.35))
                     .frame(width: 16, height: 16)
                     .scaleEffect(pulse ? 1.6 : 0.8)
                     .opacity(pulse ? 0 : 0.9)
                     .animation(.easeOut(duration: 1.4).repeatForever(autoreverses: false), value: pulse)
             }
             Circle()
-                .fill(active ? Theme.mint : Color.secondary.opacity(0.5))
+                .fill(active ? color : Color.secondary.opacity(0.5))
                 .frame(width: 8, height: 8)
-                .shadow(color: active ? Theme.mint.opacity(0.8) : .clear, radius: 4)
+                .shadow(color: active ? color.opacity(0.8) : .clear, radius: 4)
         }
         .frame(width: 16, height: 16)
         .onAppear { pulse = active }
         .onChange(of: active) { _, on in pulse = on }
+    }
+
+    private var color: Color {
+        switch health {
+        case .healthy: return Theme.mint
+        case .degraded: return Theme.amber
+        case .critical: return Theme.rose
+        }
     }
 }
 

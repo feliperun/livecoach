@@ -55,11 +55,19 @@ decided.
 ## Next horizon
 
 No fixed roadmap — pick based on real usage. Candidates surfaced during
-development but not yet built: editable/custom playbooks, saved brief profiles
-for quick context-switching between recurring scenarios, injecting the training
+development but not yet built: editable/custom playbooks, injecting the training
 interviewer's text directly as `.other` (skipping TTS→STT round-trip) for
 higher-fidelity practice transcripts, and Developer ID notarization for a
 Gatekeeper-clean install once distribution beyond personal use matters.
+
+## Shipped reliability horizon (v0.8 development)
+
+Long-session reliability is now a product feature: per-lane watchdog recovery,
+STT restart without dropping capture, delayed cross-provider failover, adaptive
+coach confidence, reusable profiles, green/amber/red health, permission identity
+diagnosis, per-tip feedback, and post-session coverage/P50/P95/recovery reports.
+The reliability state machine is exercised by a deterministic virtual 60-minute
+soak with injected stalls.
 
 ## Non-goals (for now)
 

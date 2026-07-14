@@ -15,18 +15,38 @@ struct PreflightView: View {
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(app.preflightRunning)
             if !app.preflightRunning, app.preflight.values.contains(.failed) {
-                HStack(spacing: 12) {
-                    Button("Permissões") { app.openScreenRecordingSettings() }
-                    Button("Fechar") { dismiss() }
+                VStack(spacing: 7) {
+                    if let message = permissionMessage {
+                        Text(message)
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    HStack(spacing: 12) {
+                        Button("Permissões") { app.openScreenRecordingSettings() }
+                        if app.permissionDiagnosis == .identityChanged || app.permissionDiagnosis == .captureFailed {
+                            Button("Redefinir") { app.resetScreenRecordingPermission() }
+                        }
+                        Button("Fechar") { dismiss() }
+                    }
+                    .font(.system(size: 11, weight: .semibold))
                 }
-                .font(.system(size: 11, weight: .semibold))
             }
         }
         .padding(24)
-        .frame(width: 360, height: 170)
+        .frame(width: 380, height: 205)
         .background(Theme.background)
         .preferredColorScheme(.dark)
         .onAppear { if app.preflight.values.allSatisfy({ $0 == .idle }) { app.runPreflight() } }
+    }
+
+    private var permissionMessage: String? {
+        switch app.permissionDiagnosis {
+        case .identityChanged: return "O macOS autorizou outra assinatura do CueMe. Redefina e autorize esta cópia."
+        case .captureFailed: return "A permissão aparece ativa, mas esta cópia não recebeu áudio. Redefina o acesso."
+        case .notGranted: return "Autorize Tela e Áudio do Sistema para ouvir o interlocutor."
+        default: return nil
+        }
     }
 }
 

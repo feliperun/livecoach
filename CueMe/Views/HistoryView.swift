@@ -122,14 +122,33 @@ private struct SessionDetailView: View {
                 }
                 if !record.diagnostics.events.isEmpty {
                     section("Saúde") {
-                        HStack(spacing: 8) {
+                        let report = SessionPerformanceReport(diagnostics: record.diagnostics)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 82), spacing: 8)], spacing: 8) {
                             DiagnosticChip(label: "STT", value: "\(record.diagnostics.count("stt_final"))")
-                            DiagnosticChip(label: "DICAS", value: "\(record.diagnostics.count("completed"))")
+                            DiagnosticChip(label: "COBERTURA", value: "\(report.coveragePercent)%")
                             DiagnosticChip(
-                                label: "1ª FRASE",
-                                value: record.diagnostics.averageMs("first_phrase").map { "\($0)ms" } ?? "—"
+                                label: "P50",
+                                value: report.firstPhraseP50Ms.map { "\($0)ms" } ?? "—"
                             )
-                            DiagnosticChip(label: "ERROS", value: "\(record.diagnostics.events.filter { $0.kind == .error }.count)")
+                            DiagnosticChip(label: "P95", value: report.firstPhraseP95Ms.map { "\($0)ms" } ?? "—")
+                            DiagnosticChip(label: "RECUP.", value: "\(report.recoveries)")
+                            DiagnosticChip(label: "ERROS", value: "\(report.errors)")
+                            DiagnosticChip(label: "👍", value: "\(record.coachFeedback.values.filter { $0 == .helpful }.count)")
+                            DiagnosticChip(label: "👎", value: "\(record.coachFeedback.values.filter { $0 == .notHelpful }.count)")
+                        }
+                        if !healthTimeline.isEmpty {
+                            VStack(alignment: .leading, spacing: 5) {
+                                ForEach(healthTimeline.prefix(12)) { event in
+                                    HStack(spacing: 7) {
+                                        Circle().fill(event.kind == .error ? Theme.rose : Theme.amber).frame(width: 6, height: 6)
+                                        Text(event.at.formatted(date: .omitted, time: .standard))
+                                            .font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary)
+                                        Text(eventLabel(event.name))
+                                            .font(.system(size: 10.5, weight: .semibold)).foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .padding(.top, 4)
                         }
                     }
                 }
@@ -169,6 +188,21 @@ private struct SessionDetailView: View {
             loadingWaveform = false
         }
         .onDisappear { player.teardown() }
+    }
+
+    private var healthTimeline: [DiagnosticEvent] {
+        record.diagnostics.events.filter { $0.kind == .recovery || $0.kind == .error }
+    }
+
+    private func eventLabel(_ name: String) -> String {
+        switch name {
+        case "provider_failover": return "Provider alternado"
+        case "stt_restarted": return "STT reiniciado"
+        case "mic_watchdog_restart": return "Microfone recuperado"
+        case "system_watchdog_restart": return "Áudio da chamada recuperado"
+        case "recording_stalled": return "Gravação sem avanço"
+        default: return name.replacingOccurrences(of: "_", with: " ").capitalized
+        }
     }
 
     /// Linha da transcrição correspondente ao instante de reprodução atual.

@@ -38,6 +38,8 @@ final class SessionCoordinator {
     private var speculativeDebounceTasks: [Speaker: Task<Void, Never>] = [:]
     private var speculativeText = ""
     private var summaryPolicy = SummarySchedulePolicy()
+    private var watchdog = RuntimeWatchdog()
+    private var lastRecorderWriteFailures = 0
 
     // Dedup de eco (setup alto-falante): a fala do interlocutor sai da caixa e volta
     // pelo mic. Guardamos finais recentes de cada lado e derrubamos duplicatas.
@@ -166,6 +168,8 @@ final class SessionCoordinator {
             }
         }
 
+        tasks.append(runWatchdog())
+
         // Modo treino: entrevistador por voz (lê pauta + CV, adapta às respostas).
         if app.trainingMode, client.isAvailable {
             let training = TrainingCoordinator(client: client, brief: brief)
@@ -228,6 +232,9 @@ final class SessionCoordinator {
         speculativeDebounceTasks.removeAll()
         speculativeText = ""
         summaryPolicy = .init()
+        watchdog = .init()
+        lastRecorderWriteFailures = 0
+        app.resetRuntimeHealth()
         app.recordDiagnostic(kind: .session, name: "stopped")
         log.info("Sessão parada")
         return SessionStopResult(audioDuration: duration, recordingStartedAt: audioStart)
@@ -249,13 +256,14 @@ final class SessionCoordinator {
         // DeepSeek selecionado precisa resumir via DeepSeek: usar Claude aqui fazia
         // a pergunta manual funcionar, mas deixava o resumo permanentemente offline.
         let summarySystem = Prompts.summarySystem(brief: brief)
-        let summarySession: (any CoachSession)?
+        let summaryPrimary: (any CoachSession)?
         switch SummaryBackendSelection.resolve(for: app.coachModel) {
         case .claude(let model):
-            summarySession = client.makeSession(model: model, system: summarySystem)
+            summaryPrimary = client.makeSession(model: model, system: summarySystem)
         case .deepSeek(let model):
-            summarySession = client.makeCoachSession(model: model, system: summarySystem)
+            summaryPrimary = client.makeCoachSession(model: model, system: summarySystem)
         }
+        let summarySession = makeFailoverSession(primary: summaryPrimary, system: summarySystem)
         if let summarySession {
             summaryLane = SummaryLane(session: summarySession)
             sessions = [summarySession]
@@ -272,8 +280,14 @@ final class SessionCoordinator {
         let modelPlan = CoachModelPlan.resolve(for: app.coachModel)
         // A conversa ao vivo sempre usa o tier rápido. O modelo profundo escolhido
         // fica reservado para perguntas manuais, onde alguns segundos extras cabem.
-        let coachLive = client.makeCoachSession(model: modelPlan.live, system: coachSystem)
-        let coachManual = client.makeCoachSession(model: modelPlan.manual, system: coachSystem)
+        let coachLive = makeFailoverSession(
+            primary: client.makeCoachSession(model: modelPlan.live, system: coachSystem),
+            system: coachSystem
+        )
+        let coachManual = makeFailoverSession(
+            primary: client.makeCoachSession(model: modelPlan.manual, system: coachSystem),
+            system: coachSystem
+        )
 
         coachingLane = CoachingLane(live: coachLive, manual: coachManual)
         sessions += [coachLive, coachManual].compactMap { $0 }
@@ -301,6 +315,27 @@ final class SessionCoordinator {
         })
     }
 
+    private func makeFailoverSession(
+        primary: (any CoachSession)?,
+        system: String
+    ) -> (any CoachSession)? {
+        guard let primary else { return nil }
+        let secondary: (any CoachSession)?
+        if app.coachModel.isDeepSeek {
+            secondary = client.makeSession(model: ClaudeClient.fastModel, system: system)
+        } else {
+            secondary = client.makeCoachSession(model: .deepseekFlash, system: system)
+        }
+        guard let secondary else { return primary }
+        let app = self.app
+        return FailoverCoachSession(primary: primary, secondary: secondary) { [weak app] in
+            Task { @MainActor in
+                app?.recordDiagnostic(kind: .recovery, name: "provider_failover")
+                app?.setRuntimeHealth(.degraded, reason: "Trocando o motor da dica")
+            }
+        }
+    }
+
     func ask(_ text: String) async {
         await bus.appendManual(text)
         app.upsertLine(TranscriptEvent(speaker: .self, text: "❓ \(text)", isFinal: true, isEndOfTurn: true))
@@ -314,6 +349,7 @@ final class SessionCoordinator {
         Task { [weak self] in
             for await chunk in capture.chunks {
                 guard let self else { break }
+                self.watchdog.observeChunk(chunk.source)
                 switch chunk.source {
                 case .self:  await self.micStt?.feed(chunk.buffer)
                 case .other: await self.systemStt?.feed(chunk.buffer)
@@ -328,6 +364,9 @@ final class SessionCoordinator {
             for await event in capture.events {
                 guard let self else { break }
                 self.app.applyCaptureEvent(event)
+                if case .level(let speaker, let level) = event {
+                    self.watchdog.observeLevel(speaker, level: level)
+                }
                 if case .state(.self, .silent) = event, !self.didAttemptMicRepair {
                     self.didAttemptMicRepair = true
                     self.app.echoCancellation = false
@@ -356,6 +395,75 @@ final class SessionCoordinator {
 
     func repairSystemCapture() async {
         await capture?.restartSystemCapture()
+    }
+
+    private func runWatchdog() -> Task<Void, Never> {
+        Task { [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(2)) }
+                catch { return }
+                guard let self, self.app.isRunning else { continue }
+                let snapshot = await self.recorder?.healthSnapshot()
+                if let snapshot, snapshot.writeFailures > self.lastRecorderWriteFailures {
+                    self.lastRecorderWriteFailures = snapshot.writeFailures
+                    self.app.recordDiagnostic(kind: .error, name: "recording_write_failed")
+                    self.app.setRuntimeHealth(.critical, reason: "Gravação precisa de atenção", sticky: true)
+                }
+                let actions = self.watchdog.evaluate(
+                    micState: self.app.micCaptureState,
+                    systemState: self.app.systemCaptureState,
+                    recordingFrames: snapshot?.framesWritten
+                )
+                for action in actions { await self.performWatchdog(action) }
+            }
+        }
+    }
+
+    private func performWatchdog(_ action: WatchdogAction) async {
+        switch action {
+        case .restartMicrophone:
+            app.setRuntimeHealth(.degraded, reason: "Recuperando microfone")
+            app.recordDiagnostic(kind: .recovery, name: "mic_watchdog_restart", speaker: .self)
+            await repairMicrophone()
+        case .restartSystemCapture:
+            app.setRuntimeHealth(.degraded, reason: "Recuperando áudio da chamada")
+            app.recordDiagnostic(kind: .recovery, name: "system_watchdog_restart", speaker: .other)
+            await repairSystemCapture()
+        case .restartSTT(let speaker):
+            app.setRuntimeHealth(.degraded, reason: "Recuperando transcrição")
+            app.recordDiagnostic(kind: .recovery, name: "stt_restarted", speaker: speaker)
+            await restartSTT(speaker)
+        case .recordingStalled:
+            app.setRuntimeHealth(.critical, reason: "Gravação não está avançando", sticky: true)
+            app.recordDiagnostic(kind: .error, name: "recording_stalled")
+        }
+    }
+
+    private func restartSTT(_ speaker: Speaker) async {
+        let config = SttConfig(
+            speaker: speaker,
+            localeIdentifier: app.brief.conversationLang,
+            keyterms: app.brief.keyterms
+        )
+        let replacement = NativeTranscriber(config: config)
+        do {
+            try await replacement.start()
+            switch speaker {
+            case .self:
+                await micStt?.finish()
+                micStt = replacement
+            case .other:
+                await systemStt?.finish()
+                systemStt = replacement
+            }
+            tasks.append(consume(events: replacement.events))
+            app.recordDiagnostic(kind: .recovery, name: "stt_recovery_succeeded", speaker: speaker)
+            app.clearRuntimeHealthIssue(reason: "Transcrição indisponível")
+        } catch {
+            app.recordDiagnostic(kind: .error, name: "stt_recovery_failed", speaker: speaker)
+            app.setRuntimeHealth(.critical, reason: "Transcrição indisponível", sticky: true)
+            log.error("Falha ao reiniciar STT \(speaker.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: - Consumo de eventos de STT
@@ -404,14 +512,23 @@ final class SessionCoordinator {
     private func triggerSpeculativeCoachIfNeeded(_ event: TranscriptEvent) {
         guard !app.silenceMode, !app.brief.mode.isPassive else { return }
         var detector = speculativeDetectors[event.speaker] ?? .init()
-        let shouldTrigger = detector.observe(event.text, looksActionable: Self.looksLikeQuestion)
+        let shouldTrigger = detector.observe(event.text) { text in
+            AdaptiveCoachTrigger.shouldTrigger(
+                text: text,
+                speakerCertain: event.speaker == .other,
+                stablePartial: true
+            )
+        }
         speculativeDetectors[event.speaker] = detector
         if shouldTrigger {
             issueSpeculativeCoach(text: event.text, speaker: event.speaker)
             return
         }
-        guard Self.looksLikeQuestion(event.text),
-              event.text.split(separator: " ").count >= 4 else { return }
+        guard AdaptiveCoachTrigger.shouldTrigger(
+            text: event.text,
+            speakerCertain: event.speaker == .other,
+            stablePartial: true
+        ) else { return }
         let text = event.text
         let speaker = event.speaker
         speculativeDebounceTasks[speaker]?.cancel()
@@ -503,6 +620,7 @@ final class SessionCoordinator {
             }
         }
         app.recordDiagnostic(kind: .transcription, name: "stt_final", speaker: event.speaker)
+        watchdog.observeTranscript(event.speaker)
         scheduleSummaryAfterFinal()
     }
 
@@ -543,7 +661,8 @@ final class SessionCoordinator {
     }
 
     static func shouldTriggerUncertainCoach(text: String, silenceMode: Bool, passiveMode: Bool) -> Bool {
-        !silenceMode && !passiveMode && looksLikeQuestion(text)
+        !silenceMode && !passiveMode
+            && AdaptiveCoachTrigger.shouldTrigger(text: text, speakerCertain: false, stablePartial: false)
     }
 
     static func shouldBypassLiveDebounce(_ text: String) -> Bool {
@@ -714,6 +833,7 @@ final class SessionCoordinator {
             fallbackTask.cancel()
             app.pruneEmptyCoachCards()
             app.coachBackendReady = true
+            app.recalculateRuntimeHealth()
             let totalMs = Self.milliseconds(since: request.triggeredAt)
             log.info(
                 "Coach concluído (manual: \(request.manual, privacy: .public), dica: \(emittedUsefulCard, privacy: .public), total: \(totalMs, privacy: .public) ms)"
@@ -770,6 +890,7 @@ final class SessionCoordinator {
             if let bullets = try await summaryJob.value {
                 app.summaryBullets = bullets
                 app.summaryBackendError = nil
+                app.recalculateRuntimeHealth()
                 summaryPolicy.markSummarized()
                 let elapsed = Self.milliseconds(since: started)
                 app.recordDiagnostic(

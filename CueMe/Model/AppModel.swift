@@ -13,6 +13,9 @@ final class AppModel {
     var summaryBullets: [String] = []
     var coachCards: [CoachCard] = []
     var diagnostics = SessionDiagnostics()
+    var runtimeHealth: RuntimeHealth = .healthy
+    @ObservationIgnored private var stickyRuntimeHealth: RuntimeHealth?
+    var coachFeedback: [UUID: CoachFeedback] = [:]
     var activeCoachCardID: UUID?
     private var dismissedCoachCardIDs: Set<UUID> = []
     var sessionState: SessionState = .idle
@@ -20,6 +23,8 @@ final class AppModel {
     var brief: SessionBrief {
         didSet { BriefStore.save(brief) }
     }
+    var profiles: [BriefProfile] = []
+    var activeProfileID: UUID?
 
     var sttSource: SttSource = .native
     var coachModel: CoachModel = .sonnet {        // default keyless; DeepSeek é opt-in
@@ -55,6 +60,7 @@ final class AppModel {
         uniqueKeysWithValues: PreflightCheck.allCases.map { ($0, .idle) }
     )
     var preflightRunning = false
+    var permissionDiagnosis: PermissionDiagnosis?
     var currentQuestionID: UUID?           // última pergunta/deixa do interlocutor
 
     // Histórico de sessões.
@@ -77,8 +83,11 @@ final class AppModel {
 
     init() {
         self.brief = BriefStore.load()
+        let isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         let hasClaude = ClaudeClient().isAvailable
-        let hasDeepSeek = DeepSeekCredential.isConfigured
+        // An ad-hoc XCTest host has a different Keychain identity and macOS may
+        // block waiting for an access dialog before the test bundle is loaded.
+        let hasDeepSeek = isTesting ? false : DeepSeekCredential.isConfigured
         self.claudeAvailable = hasClaude
         self.deepSeekAvailable = hasDeepSeek
 
@@ -98,6 +107,7 @@ final class AppModel {
             Task { @MainActor in self?.setTranslation(lineID: id, translation: text) }
         }
         self.history = SessionStore.loadAll()
+        self.profiles = BriefProfileStore.load()
     }
 
     // MARK: - Tradução
@@ -187,6 +197,8 @@ final class AppModel {
         coachBackendError = nil
         summaryBackendError = nil
         diagnostics = .init()
+        coachFeedback = [:]
+        resetRuntimeHealth()
         recordDiagnostic(kind: .session, name: "started")
         sessionStartedAt = Date()
         currentSessionID = UUID()
@@ -249,7 +261,8 @@ final class AppModel {
             summaryBullets: summaryBullets,
             hasAudio: stopResult.audioDuration != nil,
             audioDuration: stopResult.audioDuration ?? 0,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            coachFeedback: coachFeedback
         )
         SessionStore.save(record)
         history.insert(record, at: 0)
@@ -278,6 +291,52 @@ final class AppModel {
         deepSeekAvailable = DeepSeekCredential.isConfigured
     }
 
+    func applyProfile(_ id: UUID) {
+        guard !isSessionBusy, let profile = profiles.first(where: { $0.id == id }) else { return }
+        activeProfileID = id
+        brief = profile.brief
+        coachModel = CoachModel.resolved(
+            preferred: profile.coachModel,
+            claudeAvailable: claudeAvailable,
+            deepSeekAvailable: deepSeekAvailable
+        )
+        echoCancellation = profile.echoCancellation
+        recordAudio = profile.recordAudio
+    }
+
+    @discardableResult
+    func saveProfile(named rawName: String) -> UUID? {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, !isSessionBusy else { return nil }
+        if let index = profiles.firstIndex(where: { $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame }) {
+            profiles[index].brief = brief
+            profiles[index].coachModel = coachModel
+            profiles[index].echoCancellation = echoCancellation
+            profiles[index].recordAudio = recordAudio
+            activeProfileID = profiles[index].id
+        } else {
+            let profile = BriefProfile(
+                name: name,
+                brief: brief,
+                coachModel: coachModel,
+                echoCancellation: echoCancellation,
+                recordAudio: recordAudio
+            )
+            profiles.append(profile)
+            activeProfileID = profile.id
+        }
+        profiles.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        BriefProfileStore.save(profiles)
+        return activeProfileID
+    }
+
+    func deleteProfile(_ id: UUID) {
+        guard !isSessionBusy else { return }
+        profiles.removeAll { $0.id == id }
+        if activeProfileID == id { activeProfileID = nil }
+        BriefProfileStore.save(profiles)
+    }
+
     func checkForUpdates() {
         updater.checkForUpdates(nil)
     }
@@ -296,6 +355,7 @@ final class AppModel {
     }
 
     private func runAudioPreflight() async {
+        let preflightGranted = ScreenCapturePermissionProbe.isGranted
         guard await AudioCapture.requestMicPermission() else {
             preflight[.microphone] = .failed
             preflight[.systemAudio] = .failed
@@ -326,6 +386,14 @@ final class AppModel {
         observer.cancel()
         if preflight[.microphone] == .checking { preflight[.microphone] = .failed }
         if preflight[.systemAudio] == .checking { preflight[.systemAudio] = .failed }
+        let captureSucceeded = preflight[.systemAudio] == .passed
+        ScreenCapturePermissionProbe.markSuccess(if: captureSucceeded)
+        permissionDiagnosis = PermissionDiagnosis.evaluate(
+            preflightGranted: preflightGranted,
+            captureSucceeded: captureSucceeded,
+            currentIdentity: ScreenCapturePermissionProbe.currentIdentity,
+            lastSuccessfulIdentity: ScreenCapturePermissionProbe.lastSuccessfulIdentity
+        )
     }
 
     private func runCoachPreflight() async {
@@ -361,6 +429,12 @@ final class AppModel {
         NSWorkspace.shared.open(url)
     }
 
+    func resetScreenRecordingPermission() {
+        ScreenCapturePermissionProbe.reset()
+        permissionDiagnosis = .notGranted
+        openScreenRecordingSettings()
+    }
+
     private func applyPinned() {
         for window in NSApplication.shared.windows where window.isVisible {
             window.level = pinned ? .floating : .normal
@@ -379,8 +453,44 @@ final class AppModel {
             systemCaptureState = state
             recordDiagnostic(kind: .capture, name: "system_\(state.diagnosticName)", speaker: .other)
             systemCaptureActive = state == .active
+            if state == .active {
+                ScreenCapturePermissionProbe.markSuccess()
+                permissionDiagnosis = .ready
+            }
             if state != .active { systemLevel = 0 }
         }
+        recalculateRuntimeHealth()
+    }
+
+    func setRuntimeHealth(_ level: RuntimeHealthLevel, reason: String?, sticky: Bool = false) {
+        runtimeHealth = .init(level: level, reason: reason)
+        if sticky { stickyRuntimeHealth = runtimeHealth }
+    }
+
+    func recalculateRuntimeHealth() {
+        if let stickyRuntimeHealth {
+            runtimeHealth = stickyRuntimeHealth
+            return
+        }
+        let states = [micCaptureState, systemCaptureState]
+        if states.contains(.unavailable) || states.contains(.silent) {
+            runtimeHealth = .init(level: .critical, reason: "Um canal está sem áudio")
+        } else if states.contains(.recovering) || coachBackendError != nil || summaryBackendError != nil {
+            runtimeHealth = .init(level: .degraded, reason: "Recuperando conexão")
+        } else if isRunning {
+            runtimeHealth = .healthy
+        }
+    }
+
+    func clearRuntimeHealthIssue(reason: String? = nil) {
+        if let reason, stickyRuntimeHealth?.reason != reason { return }
+        stickyRuntimeHealth = nil
+        recalculateRuntimeHealth()
+    }
+
+    func resetRuntimeHealth() {
+        stickyRuntimeHealth = nil
+        runtimeHealth = .healthy
     }
 
     func recordDiagnostic(
@@ -397,6 +507,11 @@ final class AppModel {
             durationMs: durationMs,
             detail: detail
         ))
+    }
+
+    func setCoachFeedback(cardID: UUID, feedback: CoachFeedback) {
+        coachFeedback[cardID] = feedback
+        recordDiagnostic(kind: .coach, name: feedback == .helpful ? "feedback_helpful" : "feedback_not_helpful")
     }
 
     // MARK: - Aplicação de eventos (chamado pelo coordinator, já no MainActor)

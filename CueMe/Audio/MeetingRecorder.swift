@@ -22,6 +22,12 @@ actor MeetingRecorder {
     private var recordingStart: Date?
     private var selfFrames: AVAudioFramePosition = 0
     private var otherFrames: AVAudioFramePosition = 0
+    private var writeFailures = 0
+
+    struct HealthSnapshot: Sendable, Equatable {
+        let framesWritten: Int64
+        let writeFailures: Int
+    }
 
     @discardableResult
     func start(directory: URL) throws -> Date {
@@ -39,6 +45,7 @@ actor MeetingRecorder {
         recordingStart = startedAt
         selfFrames = 0
         otherFrames = 0
+        writeFailures = 0
         log.info("Gravação iniciada em \(directory.lastPathComponent, privacy: .public)")
         return startedAt
     }
@@ -65,6 +72,10 @@ actor MeetingRecorder {
         return Double(frames) / Self.format.sampleRate
     }
 
+    func healthSnapshot() -> HealthSnapshot {
+        .init(framesWritten: Int64(max(selfFrames, otherFrames)), writeFailures: writeFailures)
+    }
+
     // MARK: - Escrita com preenchimento de silêncio (mantém sincronia)
 
     private func write(
@@ -79,8 +90,13 @@ actor MeetingRecorder {
             padSilence(into: file, frameCount: target - framesWritten)
             framesWritten = target
         }
-        try? file.write(from: buffer)
-        framesWritten += AVAudioFramePosition(buffer.frameLength)
+        do {
+            try file.write(from: buffer)
+            framesWritten += AVAudioFramePosition(buffer.frameLength)
+        } catch {
+            writeFailures += 1
+            log.error("Falha ao gravar áudio: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func padSilence(into file: AVAudioFile, frameCount: AVAudioFramePosition) {
@@ -90,8 +106,14 @@ actor MeetingRecorder {
             let n = AVAudioFrameCount(min(AVAudioFramePosition(step), remaining))
             guard let silence = AVAudioPCMBuffer(pcmFormat: Self.format, frameCapacity: n) else { return }
             silence.frameLength = n   // memória zerada = silêncio
-            try? file.write(from: silence)
-            remaining -= AVAudioFramePosition(n)
+            do {
+                try file.write(from: silence)
+                remaining -= AVAudioFramePosition(n)
+            } catch {
+                writeFailures += 1
+                log.error("Falha ao preencher silêncio: \(error.localizedDescription, privacy: .public)")
+                return
+            }
         }
     }
 }

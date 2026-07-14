@@ -12,7 +12,7 @@ struct HeaderBar: View {
             // Espaço pros semáforos da janela (título escondido).
             Spacer().frame(width: 58)
 
-            PulseDot(active: app.isRunning)
+            PulseDot(active: app.isRunning, health: app.runtimeHealth.level)
             Text(app.statusText)
                 .font(.system(size: 12, weight: .bold, design: .rounded))
                 .foregroundStyle(app.isRunning ? .primary : .secondary)
@@ -52,6 +52,14 @@ struct HeaderBar: View {
                 Toggle("Modo treino", isOn: $app.trainingMode)
                     .disabled(app.isSessionBusy || app.brief.mode.isPassive)
                 Divider()
+                if !app.profiles.isEmpty {
+                    Menu("Perfis") {
+                        ForEach(app.profiles) { profile in
+                            Button(profile.name) { app.applyProfile(profile.id) }
+                        }
+                    }
+                    .disabled(app.isSessionBusy)
+                }
                 Button("Camera Rail") { openWindow(id: "camera-rail") }
                 Button("Testar setup") { app.showPreflight = true }
                     .disabled(app.isSessionBusy)
@@ -115,6 +123,13 @@ struct CaptureHealthAlert: View {
     }
 
     private var issue: (label: String, icon: String, color: Color, repair: () -> Void)? {
+        if app.runtimeHealth.level == .critical,
+           let reason = app.runtimeHealth.reason,
+           app.micCaptureState != .silent,
+           app.micCaptureState != .unavailable,
+           app.systemCaptureState != .unavailable {
+            return (reason.uppercased(), "exclamationmark.triangle.fill", Theme.rose, {})
+        }
         switch app.micCaptureState {
         case .silent: return ("MIC SEM SINAL", "mic.slash.fill", Theme.rose, app.repairMicrophone)
         case .unavailable: return ("MIC DESCONECTADO", "mic.slash.fill", Theme.rose, app.repairMicrophone)

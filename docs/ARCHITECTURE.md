@@ -58,10 +58,12 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
 - **Model/** — `AppModel` (state + commands), `SessionCoordinator` (wires
   capture → STT → bus → lanes → UI, partial/final echo dedup, two-speed
   manual/live coach queues with urgent-question bypass, instant local cues,
-  latest-pending coalescing, latency telemetry, recording and training),
+  latest-pending coalescing, adaptive confidence gating, independent capture/STT
+  watchdog recovery, provider failover, latency telemetry, recording and training),
   `TrainingCoordinator` (voice interviewer for practice/e2e testing),
   `HotkeyManager` (global ⌥Space show/hide), `SessionBrief` (+ `BriefStore`),
-  `SessionRecord` (+ `SessionStore`, history persistence), `Types`.
+  reusable `BriefProfile`s, `SessionRecord` (+ `SessionStore`, history persistence),
+  metadata-only runtime health/report policies, `Types`.
 - **Views/** — glance-first SwiftUI: `HeaderBar` with live channel meters,
   compact `QuestionBanner`, latest-only `CoachingPane`,
   `MeetingPanel` (passive-mode status when the coach is off), `TranscriptPane`,
@@ -109,7 +111,8 @@ coach calls its configured API directly. STT and translation are on-device.
   push. See [Getting Started](GETTING-STARTED.md).
 - Structural health gated by [Sentrux](sentrux.md).
 - XCTest target covers provider fallback, coach parsing, recording-clock
-  compatibility, transcript heuristics and per-channel silence detection.
+  compatibility, transcript heuristics, per-channel silence detection, provider
+  failover and a deterministic virtual 60-minute soak.
 - Logging via `OSLog` (`subsystem: "CueMe"`).
 - Releases: `release-please` (Conventional Commits → versioned CHANGELOG + GitHub
   Release on merge); `.dmg` built and attached manually via `scripts/package.sh`

@@ -11,6 +11,8 @@ struct BriefEditor: View {
     @State private var importError: String?
     @State private var deepseekKey = ""
     @State private var deepseekBaseURL = ""
+    @State private var selectedProfileID: UUID?
+    @State private var profileName = ""
 
     private let langs = ["pt-BR", "en-US", "es-ES", "fr-FR", "de-DE", "it-IT"]
 
@@ -31,6 +33,33 @@ struct BriefEditor: View {
             Divider()
 
             Form {
+                Section("Perfil rápido") {
+                    Picker("Perfil", selection: $selectedProfileID) {
+                        Text("Configuração atual").tag(UUID?.none)
+                        ForEach(app.profiles) { profile in
+                            Text(profile.name).tag(Optional(profile.id))
+                        }
+                    }
+                    .onChange(of: selectedProfileID) { _, id in
+                        if let id { app.applyProfile(id) }
+                    }
+                    HStack {
+                        TextField("Nome do perfil", text: $profileName)
+                        Button("Salvar") {
+                            selectedProfileID = app.saveProfile(named: profileName)
+                            profileName = ""
+                        }
+                        .disabled(profileName.trimmingCharacters(in: .whitespaces).isEmpty)
+                        if let selectedProfileID {
+                            Button(role: .destructive) {
+                                app.deleteProfile(selectedProfileID)
+                                self.selectedProfileID = nil
+                            } label: { Image(systemName: "trash") }
+                            .help("Apagar perfil")
+                        }
+                    }
+                }
+
                 Section {
                     Picker("Modo", selection: $app.brief.mode) {
                         ForEach(Mode.allCases) { Text($0.label).tag($0) }
@@ -153,6 +182,7 @@ struct BriefEditor: View {
         }
         .frame(width: 560, height: 640)
         .onAppear {
+            selectedProfileID = app.activeProfileID
             deepseekKey = DeepSeekCredential.apiKey ?? ""
             let stored = DeepSeekCredential.baseURL
             deepseekBaseURL = stored == DeepSeekCredential.defaultBaseURL ? "" : stored

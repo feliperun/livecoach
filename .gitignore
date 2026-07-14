@@ -25,6 +25,7 @@ CueMe.xcodeproj/xcuserdata/
 
 # Misc
 *.log
+*.profraw
 
 # build artifacts
 dist/

@@ -41,6 +41,10 @@ subscription/login), so there's nothing to configure and no key to leak.
 - **Line-by-line translation** via Apple's on-device **Translation** framework
   (~100–200ms, no key), with the key words bolded for fast scanning.
 - **Rolling summary** of what's been said so far.
+- **Long-call watchdog** that recovers mic, system audio, and STT independently,
+  with automatic Claude/DeepSeek failover before a slow provider responds.
+- **Reusable profiles and post-call quality** — save recurring setups, rate tips,
+  and review coverage, P50/P95 latency, recoveries, and errors without uploading audio.
 - **Contextual coaching** — the "friend beside you": "they asked X → answer like
   this", a ready-to-say phrase in the conversation language + your native
   translation + key vocabulary. Terse and emoji-cued for reading under pressure.
