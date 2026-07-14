@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/feliperun/cueme/compare/v0.6.0...v0.7.0) (2026-07-14)
+
+
+### Features
+
+* ship glanceable resilient live coaching ([cc29116](https://github.com/feliperun/cueme/commit/cc29116c633603277246e90730799d8a15061ed9))
+
 ## [0.6.0](https://github.com/feliperun/cueme/compare/v0.5.0...v0.6.0) (2026-07-14)
 
 
