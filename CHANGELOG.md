@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/feliperun/cueme/compare/v0.7.0...v0.7.1) (2026-07-14)
+
+
+### Bug Fixes
+
+* make release assets workflow dispatchable ([04d2a74](https://github.com/feliperun/cueme/commit/04d2a7481caffa516250bc3675aff9961f1b9b30))
+
 ## [0.7.0](https://github.com/feliperun/cueme/compare/v0.6.0...v0.7.0) (2026-07-14)
 
 
