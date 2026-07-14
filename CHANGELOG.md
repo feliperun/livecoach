@@ -6,7 +6,6 @@
 ### Features
 
 * add long-call recovery and provider failover ([826d86d](https://github.com/feliperun/cueme/commit/826d86d648976655bb810d085e67be50a624051f))
-* add long-call recovery and provider failover ([d66d06e](https://github.com/feliperun/cueme/commit/d66d06ef5de01f938ba3b865b14d5350fdc88ec4))
 
 ## [0.7.1](https://github.com/feliperun/cueme/compare/v0.7.0...v0.7.1) (2026-07-14)
 
