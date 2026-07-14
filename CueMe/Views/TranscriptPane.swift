@@ -13,7 +13,7 @@ struct TranscriptPane: View {
                             line: line,
                             foreign: app.brief.isForeign,
                             nativeLang: app.brief.nativeLang,
-                            keyterms: app.brief.keyterms
+                            keyterms: app.brief.keyterms + app.generatedContextKeyterms
                         )
                         .id(line.id)
                     }

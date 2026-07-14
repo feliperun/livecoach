@@ -27,12 +27,7 @@ enum DeepgramLiveRequest {
     }
 
     private static func sanitizedKeyterms(_ values: [String]) -> [String] {
-        values.lazy
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .map { String($0.prefix(120)) }
-            .prefix(100)
-            .map { $0 }
+        GlossaryTermPolicy.sanitized(values)
     }
 
     private static func sanitizedReplacements(_ values: [String: String]) -> [(key: String, value: String)] {

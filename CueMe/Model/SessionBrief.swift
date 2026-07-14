@@ -96,6 +96,7 @@ struct SessionBrief: Codable, Sendable, Equatable {
     var details: String
     var keyterms: [String]
     var cv: String?                // currículo completo (modo entrevista) — opcional
+    var contexts: [MeetingContext]? = nil // snapshots dos contextos ativos desta sessão
 
     static let `default` = SessionBrief(
         mode: .interview,

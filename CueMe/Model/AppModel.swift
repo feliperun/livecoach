@@ -22,10 +22,27 @@ final class AppModel {
     var sessionState: SessionState = .idle
 
     var brief: SessionBrief {
-        didSet { BriefStore.save(brief) }
+        didSet {
+            BriefStore.save(brief)
+            if brief != oldValue { invalidateContextGlossary() }
+        }
     }
     var profiles: [BriefProfile] = []
     var activeProfileID: UUID?
+    var contexts: [MeetingContext] = [] {
+        didSet {
+            MeetingContextStore.save(contexts)
+            invalidateContextGlossary()
+        }
+    }
+    var selectedContextIDs: Set<UUID> = [] {
+        didSet {
+            MeetingContextStore.saveSelection(selectedContextIDs)
+            invalidateContextGlossary()
+        }
+    }
+    var generatedContextKeyterms: [String] = []
+    var glossaryGenerationState: GlossaryGenerationState = .idle
 
     var sttSource: SttSource = .native {
         didSet { UserDefaults.standard.set(sttSource.rawValue, forKey: Self.sttSourceKey) }
@@ -44,8 +61,15 @@ final class AppModel {
             Task { [coordinator, summaryModel] in await coordinator?.switchSummaryModel(to: summaryModel) }
         }
     }
+    var glossaryModel: CoachModel = .sonnet {
+        didSet {
+            UserDefaults.standard.set(glossaryModel.rawValue, forKey: Self.glossaryModelKey)
+            if glossaryModel != oldValue { invalidateContextGlossary() }
+        }
+    }
     private static let coachModelKey = "coachModel"
     private static let summaryModelKey = "summaryModel"
+    private static let glossaryModelKey = "glossaryModel"
     private static let sttSourceKey = "sttSource"
     var echoCancellation: Bool = false     // AEC experimental (sem fones); default off
     var trainingMode: Bool = false         // entrevistador por voz (teste e2e + prep solo)
@@ -148,12 +172,31 @@ final class AppModel {
             claudeAvailable: hasClaude,
             deepSeekAvailable: hasDeepSeek
         )
+        let savedGlossary = UserDefaults.standard.string(forKey: Self.glossaryModelKey)
+            .flatMap(CoachModel.init(rawValue:)) ?? self.summaryModel
+        self.glossaryModel = CoachModel.resolved(
+            preferred: savedGlossary,
+            claudeAvailable: hasClaude,
+            deepSeekAvailable: hasDeepSeek
+        )
         self.vocabulary = CustomVocabularyStore.load()
         translationPipe.onResult = { [weak self] id, text in
             Task { @MainActor in self?.setTranslation(lineID: id, translation: text) }
         }
         self.history = SessionStore.loadAll()
         self.profiles = BriefProfileStore.load()
+        self.contexts = MeetingContextStore.load()
+        let availableIDs = Set(contexts.map(\.id))
+        self.selectedContextIDs = MeetingContextStore.loadSelection().intersection(availableIDs)
+        if let cache = MeetingContextStore.loadCache(),
+           cache.signature == ContextGlossaryRequest.signature(
+               contexts: contexts.filter { selectedContextIDs.contains($0.id) },
+               brief: brief,
+               model: glossaryModel
+           ) {
+            self.generatedContextKeyterms = cache.terms
+            self.glossaryGenerationState = .ready(cache.terms.count)
+        }
     }
 
     // MARK: - Tradução
@@ -194,7 +237,8 @@ final class AppModel {
     var statusText: String {
         switch sessionState {
         case .idle: return "Pronto"
-        case .preparing: return "Preparando…"
+        case .preparing:
+            return glossaryGenerationState == .generating ? "Criando glossário…" : "Preparando…"
         case .running: return "Ao vivo"
         case .stopping: return "Salvando…"
         case .paused: return "Pausado"
@@ -216,7 +260,7 @@ final class AppModel {
     // MARK: - Comandos
 
     func start() {
-        guard !isSessionBusy else { return }
+        guard !isSessionBusy, glossaryGenerationState != .generating else { return }
         guard sttSource != .deepgram || deepgramAvailable else {
             sessionState = .error("Configure a chave da Deepgram.")
             showSettings = true
@@ -229,6 +273,16 @@ final class AppModel {
             showSettings = true
             return
         }
+        sessionState = .preparing
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.prepareContextGlossaryForStart()
+            guard self.sessionState == .preparing else { return }
+            self.beginSession()
+        }
+    }
+
+    private func beginSession() {
         // Sessão nova: limpa os painéis (o snapshot da anterior já foi salvo no stop).
         transcript = []
         coachCards = []
@@ -324,7 +378,7 @@ final class AppModel {
             participantNames: participantNames,
             coachModel: coachModel,
             summaryModel: summaryModel,
-            vocabulary: vocabulary,
+            vocabulary: sessionVocabulary(),
             hasAudio: stopResult.audioDuration != nil,
             audioDuration: stopResult.audioDuration ?? 0,
             diagnostics: diagnostics,
@@ -389,6 +443,12 @@ final class AppModel {
         )
         echoCancellation = profile.echoCancellation
         recordAudio = profile.recordAudio
+        selectedContextIDs = Set(profile.contextIDs ?? []).intersection(Set(contexts.map(\.id)))
+        glossaryModel = CoachModel.resolved(
+            preferred: profile.glossaryModel ?? summaryModel,
+            claudeAvailable: claudeAvailable,
+            deepSeekAvailable: deepSeekAvailable
+        )
     }
 
     @discardableResult
@@ -401,6 +461,8 @@ final class AppModel {
             profiles[index].summaryModel = summaryModel
             profiles[index].echoCancellation = echoCancellation
             profiles[index].recordAudio = recordAudio
+            profiles[index].contextIDs = selectedContextIDs.sorted { $0.uuidString < $1.uuidString }
+            profiles[index].glossaryModel = glossaryModel
             activeProfileID = profiles[index].id
         } else {
             let profile = BriefProfile(
@@ -409,7 +471,9 @@ final class AppModel {
                 coachModel: coachModel,
                 summaryModel: summaryModel,
                 echoCancellation: echoCancellation,
-                recordAudio: recordAudio
+                recordAudio: recordAudio,
+                contextIDs: selectedContextIDs.sorted { $0.uuidString < $1.uuidString },
+                glossaryModel: glossaryModel
             )
             profiles.append(profile)
             activeProfileID = profile.id

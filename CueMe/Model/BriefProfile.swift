@@ -8,6 +8,8 @@ struct BriefProfile: Codable, Identifiable, Sendable, Equatable {
     var summaryModel: CoachModel?
     var echoCancellation: Bool
     var recordAudio: Bool
+    var contextIDs: [UUID]?
+    var glossaryModel: CoachModel?
 
     init(
         id: UUID = UUID(),
@@ -16,7 +18,9 @@ struct BriefProfile: Codable, Identifiable, Sendable, Equatable {
         coachModel: CoachModel,
         summaryModel: CoachModel? = nil,
         echoCancellation: Bool,
-        recordAudio: Bool
+        recordAudio: Bool,
+        contextIDs: [UUID]? = nil,
+        glossaryModel: CoachModel? = nil
     ) {
         self.id = id
         self.name = name
@@ -25,6 +29,8 @@ struct BriefProfile: Codable, Identifiable, Sendable, Equatable {
         self.summaryModel = summaryModel
         self.echoCancellation = echoCancellation
         self.recordAudio = recordAudio
+        self.contextIDs = contextIDs
+        self.glossaryModel = glossaryModel
     }
 }
 

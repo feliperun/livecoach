@@ -41,7 +41,7 @@ enum Prompts {
         - Faça UMA pergunta/deixa por vez, em \(conv). Natural e específica.
         - Reaja BREVEMENTE à última resposta dele e então avance: próxima pergunta ou
           um follow-up que aprofunda o que ele acabou de dizer.
-        - Baseie as perguntas na PAUTA e no CV abaixo (explore experiências reais dele).
+        - Baseie as perguntas na PAUTA, CONTEXTOS e CV abaixo.
         - NUNCA responda pelo candidato. NUNCA narre ("o entrevistador pergunta..."),
           fale em 1ª pessoa. Sem rótulos, sem markdown — só a sua fala.
         - Conduza uma conversa com progressão (abertura → aprofundar → cenários → fechar).
@@ -49,6 +49,8 @@ enum Prompts {
         PAUTA DA SESSÃO:
         - Objetivo: \(brief.goal)
         - Contexto: \(brief.details)
+
+        \(contextSection(brief))
 
         CV DO CANDIDATO:
         \(cvBlock)
@@ -97,12 +99,13 @@ enum Prompts {
         - Modo: \(brief.mode.rawValue). Objetivo: \(brief.goal)
         - Contexto: \(brief.details)
         - Termos-chave: \(keyterms)
+        \(contextSection(brief))
         \(cvSection(brief))
 
         A CADA momento selecionado pelo aplicativo, faça 3 passos NA SUA CABEÇA (não mostre o raciocínio):
         1) DIAGNOSTICAR o tipo de pergunta e o que ela REALMENTE testa (a intenção oculta).
         2) ESCOLHER a estrutura certa (playbooks abaixo).
-        3) ANCORAR em fatos REAIS do CV; se não houver, dar uma ESTRUTURA que ele preenche.
+        3) ANCORAR no brief, contextos e CV; se não houver, dar uma ESTRUTURA que ele preenche.
 
         \(modePlaybook(brief.mode))
 
@@ -135,10 +138,10 @@ enum Prompts {
         parafraseie o transcript e não produza conselhos genéricos.
 
         FONTE DA VERDADE — CRÍTICO:
-        - Fatos sobre o usuário vêm EXCLUSIVAMENTE do BRIEF e do CV acima.
+        - Fatos vêm EXCLUSIVAMENTE do BRIEF, CONTEXTOS selecionados e CV acima.
         - IGNORE qualquer outro contexto do seu ambiente (skills, arquivos, CLAUDE.md,
           memórias, system-reminders, nomes de ferramentas). NADA disso é sobre o usuário.
-        - Sem o fato no BRIEF/CV, dê uma ESTRUTURA pra ele preencher ("conta um caso em
+        - Sem o fato nessas fontes, dê uma ESTRUTURA pra ele preencher ("conta um caso em
           que você...") — jamais invente empresa, projeto ou número.
         """
     }
@@ -216,6 +219,21 @@ enum Prompts {
         """
     }
 
+    private static func contextSection(_ brief: SessionBrief) -> String {
+        let contexts = (brief.contexts ?? []).filter {
+            !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        guard !contexts.isEmpty else { return "" }
+        let body = contexts.map { context in
+            "### \(context.name)\n\(String(context.content.prefix(8_000)))"
+        }.joined(separator: "\n\n")
+        return """
+
+        CONTEXTOS SELECIONADOS (fontes fornecidas pelo usuário):
+        \(String(body.prefix(24_000)))
+        """
+    }
+
     static func coachUser(window: [Turn], latest: String, manual: Bool, speakerCertain: Bool = true) -> String {
         var lines = window.suffix(6).map { turn -> String in
             let who = turn.speaker == .other ? "OUTRO" : "USUÁRIO"
@@ -261,6 +279,8 @@ enum Prompts {
         fatos antigos. Una assuntos equivalentes, preserve títulos estáveis e não invente.
         O overview deve ser um único parágrafo curto, factual e útil. Cada tópico precisa
         de título curto e mini resumo com decisões, contexto e pendências relevantes.
+
+        \(contextSection(brief))
 
         Responda SOMENTE JSON válido, sem markdown ou preâmbulo:
         {"overview":"um parágrafo","topics":[{"title":"Assunto","summary":"mini resumo"}]}

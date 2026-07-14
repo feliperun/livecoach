@@ -121,10 +121,7 @@ final class SessionCoordinator {
             await failStart(error.localizedDescription)
             return
         }
-        let vocabulary = app.vocabulary.merged(
-            keyterms: brief.keyterms,
-            participantNames: app.participantNames
-        )
+        let vocabulary = app.sessionVocabulary()
         let mic = provider.makeSession(config: SttConfig(
             speaker: .self,
             localeIdentifier: brief.conversationLang,
@@ -536,10 +533,7 @@ final class SessionCoordinator {
     }
 
     private func restartSTT(_ speaker: Speaker) async {
-        let vocabulary = app.vocabulary.merged(
-            keyterms: app.brief.keyterms,
-            participantNames: app.participantNames
-        )
+        let vocabulary = app.sessionVocabulary()
         let config = SttConfig(
             speaker: speaker,
             localeIdentifier: app.brief.conversationLang,

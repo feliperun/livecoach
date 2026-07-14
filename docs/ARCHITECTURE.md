@@ -61,6 +61,10 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
   `CoachSession` protocol, `Summary` and `Coaching` lanes, `SessionPostProcessor`
   (saved-session summaries, takeaways and questions), `Prompts` (expert-panel
   coach persona + per-mode playbooks, see [ADR 0011](adr/0011-expert-coach-persona-and-playbooks.md)).
+- **Context preflight** — reusable `MeetingContext` documents are selected per
+  profile/session; `ContextGlossaryGenerator` asks the chosen LLM for bounded
+  Nova-3 keyterms before capture, reusing a content-addressed local cache when
+  inputs are unchanged ([ADR 0024](adr/0024-reusable-contexts-and-preflight-glossary.md)).
 - **Model/** — `AppModel` (state + commands), `SessionCoordinator` (wires
   capture → STT → bus → lanes → UI, partial/final echo dedup, independently
   swappable coach/minutes models, semantic per-mode triggers, stable navigable
@@ -139,6 +143,9 @@ to Nova-3. Translation remains on-device in either configuration.
 - Coaching/summary text is sent to the selected provider: Anthropic through the
   user's isolated CLI session or DeepSeek through direct HTTPS. CLI sessions run
   from an empty cwd and the coach prompt walls off ambient context.
+- Selected reusable contexts are local at rest. Their content is sent only to
+  the explicitly selected LLM for glossary generation and to the configured
+  coach/minutes provider as an explicit session truth source.
 - Recorded audio (`.m4a`, with legacy `.caf` playback) is never uploaded as an
   archive — it is written locally and only read back by `MeetingPlayer` for
   in-app playback.

@@ -57,6 +57,9 @@ subscription/login), so there's nothing to configure and no key to leak.
   real stories. Plus a manual question box for mid-conversation.
 - **Editable meeting memory** — name participants, edit timestamped notes, correct
   transcript text with visible provenance, and teach Deepgram a persistent glossary.
+- **Reusable contexts** — keep separate product, customer, company and project
+  sources; select any combination before a meeting. The chosen LLM prepares a
+  cached, session-specific Deepgram glossary before recording starts.
   A separate recording-only mode turns live coaching off.
 - **Session recording**, on by default — the original audio (both sides) is
   recorded as portable, high-quality AAC-LC `.m4a` files in sync with the transcript.

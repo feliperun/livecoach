@@ -8,7 +8,10 @@ struct CustomVocabulary: Codable, Sendable, Hashable {
         let term = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !term.isEmpty, !keyterms.contains(where: { $0.caseInsensitiveCompare(term) == .orderedSame }) else { return }
         keyterms.append(term)
-        if keyterms.count > 100 { keyterms.removeFirst(keyterms.count - 100) }
+        while keyterms.count > GlossaryTermPolicy.maximumTerms
+                || GlossaryTermPolicy.estimatedTokenCount(keyterms) > GlossaryTermPolicy.maximumTokens {
+            keyterms.removeFirst()
+        }
     }
 
     @discardableResult

@@ -44,7 +44,11 @@ struct CoachingPane: View {
 
             Group {
                 if let latest {
-                    HeroCard(card: latest, convLang: app.brief.conversationLang, keyterms: app.brief.keyterms)
+                    HeroCard(
+                        card: latest,
+                        convLang: app.brief.conversationLang,
+                        keyterms: app.brief.keyterms + app.generatedContextKeyterms
+                    )
                         .transition(.opacity.combined(with: .scale(scale: 0.97)))
                 } else {
                     EmptyCoachHint(

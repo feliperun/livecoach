@@ -28,8 +28,10 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
    `ClaudeClient.makeCoachSession` picks by the selected `CoachModel`.
    `CoachingLane`/`SummaryLane` wrap a session with a specific prompt
    (`Prompts.swift`) and parsing (`CoachCardParser`), backend-agnostic.
-   `TrainingCoordinator` is a sibling brain that *speaks* (via
-   `AVSpeechSynthesizer`) instead of coaching.
+  `TrainingCoordinator` is a sibling brain that *speaks* (via
+  `AVSpeechSynthesizer`) instead of coaching.
+   `ContextGlossaryGenerator` is a bounded preflight brain: it turns selected
+   local `MeetingContext` documents into cached Deepgram keyterms before capture.
 5. **Orchestration** (`Model/SessionCoordinator`) — the only thing that wires
    layers 1–4 together for a live session: starts capture, routes chunks to STT
    and the recorder, triggers the coach on turn-end, applies echo dedup. Lives
@@ -60,7 +62,7 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 | Word-class tagging | `NaturalLanguage`/`NLTagger` in `Highlighter` | On-device; tiers translated text for fast scanning. |
 | Audio playback | Two `AVAudioPlayer`s in `MeetingPlayer` | Synced via a shared `deviceCurrentTime` anchor, not a mixer graph. |
 | CV import | `PDFKit` in `BriefEditor` | Extracts text from a pasted/imported résumé. |
-| Persistence | `FileManager` + `JSONEncoder`/`Decoder` in `SessionStore`/`BriefStore` | User-selectable local archive; Application Support default and legacy fallback. |
+| Persistence | `FileManager` + `JSONEncoder`/`Decoder` in `SessionStore`/`BriefStore`/`MeetingContextStore` | User-selectable session archive; briefs, reusable contexts and glossary cache in Application Support. |
 | Packaging | `xcodebuild` + `hdiutil` in `scripts/package.sh` | Local only — see [Getting Started](GETTING-STARTED.md) and [Packaging](PACKAGING.md). |
 
 ## Contracts & invariants
@@ -73,10 +75,11 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 - **STT providers preserve one session per capture origin.** Native and Deepgram
   must emit the same `TranscriptEvent` contract; switching providers cannot
   introduce diarization or merge mic/system audio.
-- **The coach's only source of truth about the user is the brief + CV.** The
+- **The coach's only source of truth is the brief + selected contexts + CV.** The
   system prompt explicitly forbids using ambient CLI context; never weaken this
   when editing `Prompts.coachSystem` ([ADR 0008](adr/0008-coach-ux-and-context-safety.md)).
-  `Mode.isPassive` (meeting mode) means the coach is never constructed or
+  Context documents are user-authored and explicit; ambient CLI context remains
+  forbidden. `Mode.isPassive` means the coach is never constructed or
   triggered at all — see `SessionCoordinator.buildBrain`/`consumeBusForCoaching`.
 - **Coach output is always the 4-line card format or the literal string `NADA`.**
   `CoachCardParser` depends on the exact labels (`GUIA:`/`DIGA:`/`PT:`/`KEY:`); a
