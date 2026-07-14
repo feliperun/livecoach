@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/feliperun/cueme/compare/v0.7.1...v0.8.0) (2026-07-14)
+
+
+### Features
+
+* add long-call recovery and provider failover ([826d86d](https://github.com/feliperun/cueme/commit/826d86d648976655bb810d085e67be50a624051f))
+
 ## [0.7.1](https://github.com/feliperun/cueme/compare/v0.7.0...v0.7.1) (2026-07-14)
 
 
