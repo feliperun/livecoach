@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.0](https://github.com/feliperun/cueme/compare/v0.8.0...v0.9.0) (2026-07-14)
+
+
+### Features
+
+* add adaptive meeting intelligence ([9a47cf3](https://github.com/feliperun/cueme/commit/9a47cf31c2a333bf797ae3de138e484f2eef97d8))
+* add Deepgram streaming transcription ([108a8b2](https://github.com/feliperun/cueme/commit/108a8b20e8edd547fa5776f6be62993b709c7bf3))
+* add meeting memory workspace ([382f313](https://github.com/feliperun/cueme/commit/382f31307bb06ba735a2074225483881bd1322de))
+* add reusable meeting contexts ([d7b8c6f](https://github.com/feliperun/cueme/commit/d7b8c6f669ceb0cdc47ffc56b2394effc4339d01))
+* improve audio quality and polish workspace ([4b76b24](https://github.com/feliperun/cueme/commit/4b76b24124e61828014f132bd2f48b9bc6b49e11))
+* ship meeting memory and intelligent transcription ([1cfd72a](https://github.com/feliperun/cueme/commit/1cfd72a8de57cbc316b633683d01f6f701856b11))
+
 ## [0.8.0](https://github.com/feliperun/cueme/compare/v0.7.1...v0.8.0) (2026-07-14)
 
 
