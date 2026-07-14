@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.1](https://github.com/feliperun/cueme/compare/v0.9.0...v0.9.1) (2026-07-14)
+
+
+### Bug Fixes
+
+* launch ad hoc releases with Sparkle ([84b1de5](https://github.com/feliperun/cueme/commit/84b1de5f14eec0bc537bdb9a1cc10945952b5d77))
+* launch ad hoc releases with Sparkle ([6c802b0](https://github.com/feliperun/cueme/commit/6c802b0a5eddbab62d7d6434fa242df46799a92d))
+
 ## [0.9.0](https://github.com/feliperun/cueme/compare/v0.8.0...v0.9.0) (2026-07-14)
 
 
