@@ -11,7 +11,8 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 1. **Capture** (`Audio/AudioCapture`) — turns hardware into `AudioChunk`
    (speaker-tagged, timestamped PCM buffers). Two independent sources: mic
    (`AVAudioEngine`, tag `.self`) and system audio (`ScreenCaptureKit`, tag
-   `.other`). This is the *only* place that knows about audio hardware.
+   `.other`). It also emits `AudioCaptureEvent` level/health signals and owns
+   bounded recovery. This is the *only* place that knows about audio hardware.
 2. **Understand** (`STT/`, `Audio/MeetingRecorder`) — turns `AudioChunk` into
    meaning or a persisted artifact: `NativeTranscriber` → `TranscriptEvent`
    (on-device `SpeechAnalyzer`), `TranslationPipe` → translated text (on-device
@@ -64,6 +65,8 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 - **Speaker is known by capture origin, never inferred from voice.** `.self` =
   mic, `.other` = system audio. No diarization anywhere in the codebase
   ([ADR 0007](adr/0007-speaker-by-origin-and-echo-dedup.md)).
+  Partial and final text may still echo across physical channels; confirmed echo
+  is removed from both the UI and the rolling `TranscriptBus` context.
 - **The coach's only source of truth about the user is the brief + CV.** The
   system prompt explicitly forbids using ambient CLI context; never weaken this
   when editing `Prompts.coachSystem` ([ADR 0008](adr/0008-coach-ux-and-context-safety.md)).
@@ -72,11 +75,22 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 - **Coach output is always the 4-line card format or the literal string `NADA`.**
   `CoachCardParser` depends on the exact labels (`GUIA:`/`DIGA:`/`PT:`/`KEY:`); a
   prompt change that alters the format must update the parser in the same commit.
+- **Manual coach input has its own lane.** Automatic STT activity cannot cancel a
+  manual request. Live requests use the fast tier and coalesce while one provider
+  call is in flight; explicit questions bypass debounce and get a deterministic
+  local cue ([ADR 0016](adr/0016-observable-non-cancelling-coach-lanes.md),
+  [ADR 0017](adr/0017-fast-coach-two-speed.md)).
 - **Every `AudioChunk` carries a real capture timestamp**, not append order.
   `MeetingRecorder` depends on this to silence-pad two independent files back
   into wall-clock sync ([ADR 0012](adr/0012-meeting-mode-and-synced-recording.md)) —
   don't default `AudioChunk.ts` away from `Date()` at the capture call site.
   Coach/echo-dedup logic also key off it.
+- **Audio replay uses the recorder's clock, not the Start-button clock.**
+  `SessionRecord.recordingStartedAt` is persisted with the stop result; legacy
+  records fall back to `startedAt`.
+- **A session is never silently healthy.** Mic and system channel states are
+  independent; digital-zero mic data and an interrupted `SCStream` must be
+  surfaced and repaired or remain visibly unavailable ([ADR 0014](adr/0014-per-channel-capture-health.md)).
 - **Recordings are located by session id, never by a stored path.**
   `MeetingRecording.directory(for:)` derives the path from the UUID; exported
   session JSON stays portable across machines/reinstalls.

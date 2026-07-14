@@ -13,7 +13,7 @@ actor TranscriptBus {
 
     func publish(_ event: TranscriptEvent) {
         if event.isFinal {
-            appendTurn(speaker: event.speaker, text: event.text)
+            appendTurn(id: event.id, speaker: event.speaker, text: event.text)
         }
         for cont in subscribers.values {
             cont.yield(event)
@@ -43,15 +43,20 @@ actor TranscriptBus {
         appendTurn(speaker: .self, text: text)
     }
 
+    /// Remove um turno que depois se confirmou como eco do áudio de sistema.
+    func removeTurn(id: UUID) {
+        turns.removeAll { $0.id == id }
+    }
+
     func finish() {
         for cont in subscribers.values { cont.finish() }
         subscribers.removeAll()
     }
 
-    private func appendTurn(speaker: Speaker, text: String) {
+    private func appendTurn(id: UUID = UUID(), speaker: Speaker, text: String) {
         // Coalesce: se o mesmo locutor emite finals seguidos, ainda registramos
         // como turnos distintos — o transcript é a fonte da verdade fina.
-        turns.append(Turn(speaker: speaker, text: text))
+        turns.append(Turn(id: id, speaker: speaker, text: text))
         if turns.count > maxTurns {
             turns.removeFirst(turns.count - maxTurns)
         }

@@ -12,7 +12,8 @@ protocol CoachSession: Sendable {
     func complete(_ user: String) async throws -> String
 
     /// Aquece o backend (paga cold start / TLS antes do 1º turno real).
-    func prewarm()
+    /// O erro precisa chegar à UI; um warm-up silencioso mascara auth/rate limit.
+    func prewarm() async throws
 
     /// Encerra a sessão e libera recursos.
     func shutdown() async

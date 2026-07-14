@@ -1,19 +1,17 @@
 # Packaging & distributing CueMe
 
-Short version: **the build has to happen on your Mac** — GitHub's runners can't
-build CueMe yet. Here's why and how.
+Short version: GitHub CI can build and test CueMe on `macos-26`, while release
+packaging and signing still happen on your Mac.
 
-## Can GitHub CI build it? Not yet.
+## Can GitHub CI build it? Yes.
 
 CueMe uses **macOS 26** frameworks (`SpeechAnalyzer`, `Translation`,
-`SpeechTranscriber`). GitHub Actions macOS runners are currently **macOS 15 /
-Xcode 16**, whose SDK doesn't have those APIs — so `xcodebuild` fails there. The
-`quality` workflow therefore gates on **Sentrux only**; the app build runs
-locally.
+`SpeechTranscriber`). The `quality` workflow uses GitHub's `macos-26` runner to
+compile the app and run XCTest with an ad-hoc-signed test host, alongside the
+Sentrux gates.
 
-When GitHub ships a `macos-26` runner, a release workflow can build + package +
-attach the `.dmg` to the GitHub Release automatically. Until then: build on your
-Mac.
+The release workflow does not yet package, Developer ID-sign, notarize, or
+attach the `.dmg`; those distribution steps remain local/manual.
 
 ## Build a `.dmg` locally
 

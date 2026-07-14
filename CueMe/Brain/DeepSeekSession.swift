@@ -44,10 +44,8 @@ actor DeepSeekSession: CoachSession {
     }
 
     /// Aquece a conexão (TLS/HTTP2) com um turno trivial descartado.
-    nonisolated func prewarm() {
-        Task { [weak self] in
-            _ = try? await self?.complete("(aquecimento — responda apenas: NADA)")
-        }
+    func prewarm() async throws {
+        _ = try await complete("(aquecimento — responda apenas: NADA)")
     }
 
     func complete(_ user: String) async throws -> String {
@@ -63,6 +61,8 @@ actor DeepSeekSession: CoachSession {
     // MARK: - Requisição + parse do SSE
 
     private func run(user: String, continuation: AsyncThrowingStream<String, Error>.Continuation) async {
+        let requestStartedAt = ContinuousClock.now
+        var didLogFirstToken = false
         let body: [String: Any] = [
             "model": model,
             "stream": true,
@@ -103,6 +103,11 @@ actor DeepSeekSession: CoachSession {
                 if payload.isEmpty { continue }
                 if payload == "[DONE]" { break }
                 if let text = Self.deltaContent(payload), !text.isEmpty {
+                    if !didLogFirstToken {
+                        didLogFirstToken = true
+                        let ms = Self.milliseconds(since: requestStartedAt)
+                        log.info("DeepSeek primeiro token (\(self.model, privacy: .public)): \(ms, privacy: .public) ms")
+                    }
                     continuation.yield(text)
                 }
             }
@@ -136,6 +141,11 @@ actor DeepSeekSession: CoachSession {
             if acc.count > 500 { break }
         }
         return acc
+    }
+
+    private static func milliseconds(since start: ContinuousClock.Instant) -> Int64 {
+        let elapsed = start.duration(to: .now).components
+        return elapsed.seconds * 1_000 + elapsed.attoseconds / 1_000_000_000_000_000
     }
 
     enum DeepSeekError: LocalizedError {

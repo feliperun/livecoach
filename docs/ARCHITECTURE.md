@@ -14,10 +14,9 @@ ScreenCaptureKit (system, .other)┘        │                                 
                                     MeetingRecorder                     TranscriptBus (actor)
                                   (synced dual .caf files,     ┌────────────┬────────────┬────────────┐
                                    opt-out, on by default)     ▼            ▼            ▼            ▼
-                                                          Translation   Summary    Coaching       AppModel
-                                                          (on-device,   (haiku,    (sonnet/opus,  (@Observable,
-                                                           TranslationPipe) ~30s)   streaming,      MainActor)
-                                                                                    warm+prewarmed)     │
+                                                          Translation   Summary    Fast Coach     AppModel
+                                                          (on-device,   (fast,     (Flash/Sonnet, (@Observable,
+                                                           TranslationPipe) separate) DIGA-first) MainActor)
                                                                                                         ▼
                                               TrainingCoordinator ──speaks (TTS)──▶ (captured back as .other)
                                               (voice interviewer, opt-in)
@@ -40,7 +39,8 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
 ## Components
 
 - **Audio/** — `AudioCapture` (mic via `AVAudioEngine` + system via
-  `ScreenCaptureKit`, tagged by origin, echo-dedup aware, opt-in AEC),
+  `ScreenCaptureKit`, tagged by origin, per-channel level/health events,
+  digital-silence detection and bounded system-stream recovery, opt-in AEC),
   `AudioConverter`, `MeetingRecorder` (writes two timestamp-synced `.caf` files
   for later playback), `MeetingPlayer` (two `AVAudioPlayer`s synced via
   `deviceCurrentTime`), `WaveformGenerator` (background amplitude envelope for
@@ -50,17 +50,20 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
 - **Bus/** — `TranscriptBus` actor: fan-out `AsyncStream` + rolling window.
 - **Brain/** — `ClaudeClient` (locates the `claude` CLI), `ClaudeSession`
   (a long-lived `claude -p` streaming-json process, prewarmed, isolated cwd +
-  hooks disabled), `DeepSeekSession` (direct DeepSeek HTTP/SSE, stateless,
+  hooks/user settings/tools/MCP disabled), `DeepSeekSession` (direct DeepSeek HTTP/SSE, stateless,
   non-thinking; keyed via `DeepSeekCredential` in the Keychain, see
   [ADR 0013](adr/0013-deepseek-coach-via-direct-api.md)) — both behind the
   `CoachSession` protocol, `Summary` and `Coaching` lanes, `Prompts` (expert-panel
   coach persona + per-mode playbooks, see [ADR 0011](adr/0011-expert-coach-persona-and-playbooks.md)).
 - **Model/** — `AppModel` (state + commands), `SessionCoordinator` (wires
-  capture → STT → bus → lanes → UI, echo dedup, coach triggering, recording,
-  training), `TrainingCoordinator` (voice interviewer for practice/e2e testing),
+  capture → STT → bus → lanes → UI, partial/final echo dedup, two-speed
+  manual/live coach queues with urgent-question bypass, instant local cues,
+  latest-pending coalescing, latency telemetry, recording and training),
+  `TrainingCoordinator` (voice interviewer for practice/e2e testing),
   `HotkeyManager` (global ⌥Space show/hide), `SessionBrief` (+ `BriefStore`),
   `SessionRecord` (+ `SessionStore`, history persistence), `Types`.
-- **Views/** — compact SwiftUI: `HeaderBar`, `QuestionBanner`, `CoachingPane`,
+- **Views/** — glance-first SwiftUI: `HeaderBar` with live channel meters,
+  compact `QuestionBanner`, latest-only `CoachingPane`,
   `MeetingPanel` (passive-mode status when the coach is off), `TranscriptPane`,
   `SummaryPane`, `BriefEditor`, `HistoryView` (+ `WaveformPlayerView`),
   `AboutView`, `Theme`, and `Highlighter` (on-device `NaturalLanguage` tiering of
@@ -89,20 +92,24 @@ Every session is snapshotted on `stop()` to `Application Support/CueMe/`:
 `SessionStore`, and — if recording was on (default) — `recordings/<id>/{self,other}.caf`
 via `MeetingRecorder`. `HistoryView` lists/browses past sessions; a session can
 be copied/exported as JSON (no absolute paths embedded — audio is relocated by
-id at read time). Deleting a session removes both the JSON and its recording.
+id at read time). `recordingStartedAt` anchors transcript seeking to the audio
+clock rather than the earlier UI-start clock. Deleting a session removes both
+the JSON and its recording.
 
 ## Runtime & hosting
 
-Native macOS 26 app (Apple Silicon). No backend. The LLM runs through the user's
-local **Claude Code CLI** (`claude -p`), reusing their existing login — no API
-key. STT and translation are on-device.
+Native macOS 26 app (Apple Silicon). No app-owned backend. The default LLM runs
+through the user's local **Claude Code CLI** (`claude -p`); an opt-in DeepSeek
+coach calls its configured API directly. STT and translation are on-device.
 
 ## Observability & quality
 
-- Build gate: `xcodebuild … build` (macOS 26 SDK), **local only** — GitHub's CI
-  runners lack the macOS 26 SDK, so `.github/workflows/quality.yml` runs Sentrux
-  alone. See [Getting Started](GETTING-STARTED.md).
+- Build/test gate: `xcodebuild … test` on GitHub's `macos-26` runner, using an
+  ad-hoc-signed test host. The same build and XCTest gates run locally before
+  push. See [Getting Started](GETTING-STARTED.md).
 - Structural health gated by [Sentrux](sentrux.md).
+- XCTest target covers provider fallback, coach parsing, recording-clock
+  compatibility, transcript heuristics and per-channel silence detection.
 - Logging via `OSLog` (`subsystem: "CueMe"`).
 - Releases: `release-please` (Conventional Commits → versioned CHANGELOG + GitHub
   Release on merge); `.dmg` built and attached manually via `scripts/package.sh`
@@ -110,11 +117,11 @@ key. STT and translation are on-device.
 
 ## Security model
 
-- No secrets stored by the app; the CLI holds the user's Claude auth.
+- Claude auth stays in the CLI. An optional DeepSeek key is stored in Keychain.
 - STT audio never leaves the device; translation is on-device.
-- Coaching/summary text is sent to Anthropic through the user's own CLI session.
-  CLI sessions run from an isolated empty cwd and the coach prompt walls off any
-  ambient context so no local project/CV data leaks in unintentionally.
+- Coaching/summary text is sent to the selected provider: Anthropic through the
+  user's isolated CLI session or DeepSeek through direct HTTPS. CLI sessions run
+  from an empty cwd and the coach prompt walls off ambient context.
 - Recorded audio (`.caf` files) never leaves the device — it's written locally
   and only read back by `MeetingPlayer` for in-app playback.
 - Permissions: Microphone (required) and Screen & System Audio Recording

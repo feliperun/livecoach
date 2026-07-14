@@ -1,13 +1,13 @@
 # Launch copy for CueMe
 
 Ready-to-paste posts for launching CueMe in the community. Tweak the voice to
-fit you; keep the honesty (it's a personal tool, macOS-26 only, no API keys).
+fit you; keep the honesty (it's a personal tool, macOS-26 only, Claude keyless by default).
 
 ---
 
 ## Show HN
 
-**Title:** Show HN: CueMe – a real-time conversation copilot for macOS (on-device, no API keys)
+**Title:** Show HN: CueMe – a real-time conversation copilot for macOS (on-device, keyless default)
 
 **Body:**
 
@@ -23,7 +23,7 @@ A few things I wanted that existing tools didn't do:
 - **On-device and keyless.** Speech-to-text is Apple's SpeechAnalyzer and
   translation is the on-device Translation framework (~100–200ms). The LLM
   "brain" runs through the local Claude Code CLI, reusing your existing login —
-  so there's no API key to provision or leak.
+  so the default path has no API key to provision. DeepSeek is optional and keyed.
 - **A coach that reads like a friend.** Under pressure you can't read paragraphs,
   so the cue is terse: one line of guidance in your language, a ready-to-say
   phrase in theirs, and the key vocabulary. It's grounded only in a brief + your
@@ -52,7 +52,7 @@ rules about assistance — know the context you're in.
 I built CueMe — a real-time conversation copilot for macOS.
 
 It hears both sides of a call, translates live, and whispers what to say next.
-On-device speech. No API keys.
+On-device speech. Claude keyless by default.
 
 🧵 how it works ↓
 https://github.com/feliperun/cueme
@@ -67,8 +67,8 @@ audio driver. Just ScreenCaptureKit + AVAudioEngine.
 Speech + translation run on-device (SpeechAnalyzer + Apple's Translation
 framework, ~100–200ms).
 
-The coaching brain runs through your local Claude Code CLI — no API key to
-manage or leak. Warm sessions, prewarmed so the first cue is fast.
+The default coaching brain runs through your local Claude Code CLI — no API key
+to manage. DeepSeek is an explicit keyed option. Warm sessions keep cues fast.
 
 **4/**
 The coach reads like a friend beside you:
@@ -89,7 +89,7 @@ pipeline, so it's also an end-to-end test.
 
 ## Reddit (r/macapps or r/MacOS)
 
-**Title:** [OSS] CueMe — a real-time conversation copilot for macOS (on-device, no API keys)
+**Title:** [OSS] CueMe — a real-time conversation copilot for macOS (on-device, keyless default)
 
 **Body:**
 
@@ -100,8 +100,8 @@ to say next. Built for mock interviews and prepping hard conversations.
 Highlights:
 - Captures your mic + the other side's system audio (ScreenCaptureKit) — speaker
   known by origin, no diarization, no virtual audio driver.
-- On-device speech + translation (macOS 26 frameworks). The LLM runs on your
-  local Claude Code CLI — no API keys.
+- On-device speech + translation (macOS 26 frameworks). Claude CLI is the
+  keyless default; DeepSeek is optional.
 - Terse, emoji-cued coaching grounded in a brief + your CV.
 - A voice "training mode": an interviewer reads your CV and asks questions aloud,
   adapting to your answers.

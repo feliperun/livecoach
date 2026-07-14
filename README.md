@@ -20,7 +20,8 @@ both sides of a live conversation, transcribes and translates on the fly,
 summarizes what's been said, and gives you contextual coaching as you speak.
 Built for **mock interviews**, sales calls, and difficult conversations.
 
-100% native Swift. No webview, no virtual audio driver, no API keys.
+100% native Swift. No webview or virtual audio driver. Claude is keyless by
+default; DeepSeek is an explicit, API-keyed option.
 The "brain" runs through your local **Claude Code CLI** (your existing
 subscription/login), so there's nothing to configure and no key to leak.
 
@@ -82,7 +83,9 @@ KEYTERMS: end-to-end ownership · technical growth · scope
   ```
   Install: https://docs.claude.com/en/docs/claude-code
 
-No Anthropic API key is used — the app reuses your CLI login.
+No Anthropic API key is used — the default coach reuses your Claude CLI login.
+DeepSeek V4 is optional and stores its key in the macOS Keychain; when selected,
+the coach sends the brief/CV and recent conversation context to that endpoint.
 
 ---
 
@@ -142,16 +145,15 @@ ScreenCaptureKit (sys) ──┘                                          │
                                                              TranscriptBus (actor)
                      ┌──────────────────────┬─────────────────────┬─────────────┐
                      ▼                      ▼                     ▼             ▼
-        Apple Translation (on-device)   Summary (haiku)   Coaching (opus/sonnet,  SwiftUI
-        — transcript, ~100–200ms        haiku, ~30s        streaming, prewarmed)
+        Apple Translation (on-device)   Summary (fast)    Fast Coach (Flash/Sonnet, SwiftUI
+        — transcript                    separate lane      DIGA-first streaming)
                      └──────────────────────┴─────────────────────┘
-                          coach/summary = persistent `claude -p` sessions (warm)
+                          provider = isolated Claude CLI or direct DeepSeek SSE
 ```
 
-- **Brain via Claude Code CLI.** The coach and summary each keep a long-lived
-  `claude -p` process in streaming-json mode (`--input-format stream-json
-  --output-format stream-json`), prewarmed on start so the first hint is fast.
-  System prompt (with brief + CV) and model are fixed per session.
+- **Two-speed brain.** Live hints use the fast tier (DeepSeek Flash or Sonnet),
+  while manual asks keep the selected deep tier. Claude uses isolated `claude -p`
+  processes; DeepSeek uses direct SSE HTTP. Separate fast sessions produce summary.
 - **Translation is off the LLM** — Apple's on-device `Translation` framework, so
   the coach LLM is never blocked by per-line translation.
 - **Speaker by origin.** Mic = `self`, system audio = `other`. No diarization;
@@ -190,8 +192,9 @@ and accessibility use.
 
 - Speech-to-text is **on-device** (`SpeechAnalyzer`) — audio doesn't leave your
   Mac for transcription.
-- Coaching/translation/summary go through your **local Claude Code CLI**, using
-  your own account. No third-party keys are stored by this app.
+- Translation stays on-device. Coach and summary use the selected provider:
+  Claude CLI by default, or DeepSeek when explicitly configured. DeepSeek keys
+  live in the macOS Keychain.
 
 ## License
 

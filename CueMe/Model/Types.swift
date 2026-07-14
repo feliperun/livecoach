@@ -124,14 +124,46 @@ struct CoachCard: Identifiable, Sendable, Codable {
         self.isStreaming = isStreaming
         self.ts = ts
     }
+
+    var hasContent: Bool {
+        !guidePT.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !(sayConversation ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !sayNative.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 }
 
 enum SessionState: Sendable, Equatable {
     case idle
     case preparing
     case running
+    case stopping
     case paused
     case error(String)
+}
+
+/// Saúde de cada canal de captura. A UI mostra apenas um sinal visual curto;
+/// detalhes ficam no tooltip/log para não disputar atenção durante a conversa.
+enum CaptureChannelState: Sendable, Equatable {
+    case waiting
+    case active
+    case silent
+    case recovering
+    case unavailable
+}
+
+/// Eventos de baixo volume emitidos pela captura para manter a UI honesta.
+enum AudioCaptureEvent: Sendable {
+    case level(Speaker, Float)
+    case state(Speaker, CaptureChannelState)
+}
+
+/// Resultado atômico do teardown. O início do áudio é diferente do clique em
+/// "Iniciar" e precisa acompanhar a duração para o replay ficar sincronizado.
+struct SessionStopResult: Sendable {
+    var audioDuration: TimeInterval?
+    var recordingStartedAt: Date?
+
+    static let empty = SessionStopResult(audioDuration: nil, recordingStartedAt: nil)
 }
 
 /// Delta emitido pela raia de coaching enquanto o modelo faz streaming.

@@ -8,8 +8,8 @@ Live conversations in a second language — job interviews, sales calls, hard
 talks — overload you: parse what was just said, translate it in your head, and
 compose a strong answer, all in a few seconds. macOS 26 finally makes the pieces
 native and cheap: on-device speech (`SpeechAnalyzer`), on-device translation
-(`Translation`), and a local LLM brain through the Claude Code CLI — no servers,
-no API keys. CueMe stitches them into a copilot that whispers "he asked X →
+(`Translation`), and a keyless default brain through the Claude Code CLI. CueMe
+stitches them into a copilot that whispers "he asked X →
 answer like this" while you keep your attention on the person.
 
 ## The problem
@@ -29,8 +29,8 @@ its translation, a couple of key words. Terse beats thorough when you're live.
 
 ## Principles
 
-- **Local-first.** On-device STT and translation; the LLM runs through the
-  user's own Claude Code CLI. No third-party keys, nothing to leak.
+- **Local-first.** On-device STT and translation; the default LLM runs through
+  the user's own Claude Code CLI. A keyed DeepSeek backend is explicit opt-in.
 - **Latency is a feature.** Prewarm sessions, keep translation off the LLM,
   scan in two seconds. If it's not fast, it's useless mid-sentence.
 - **Truth from the brief only.** Coaching never fabricates the user's history —

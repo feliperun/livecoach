@@ -13,22 +13,36 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
 
     let chunks: AsyncStream<AudioChunk>
     private let continuation: AsyncStream<AudioChunk>.Continuation
+    let events: AsyncStream<AudioCaptureEvent>
+    private let eventsContinuation: AsyncStream<AudioCaptureEvent>.Continuation
 
     private let engine = AVAudioEngine()
     private var scStream: SCStream?
     private let scQueue = DispatchQueue(label: "CueMe.SCStreamOutput")
+    private let stateLock = NSLock()
+    private var systemDesired = false
+    private var systemRecoveryTask: Task<Void, Never>?
+    private var systemRecoveryAttempt = 0
+
+    private let signalMonitor = AudioSignalMonitor()
 
     private var micRunning = false
     private var systemRunning = false
     private var captureOwnProcess = false   // modo treino: captar o TTS do próprio app
 
     /// Captura de sistema (interlocutor) ativa? Lido pela UI.
-    var isSystemActive: Bool { systemRunning }
+    var isSystemActive: Bool {
+        stateLock.lock(); defer { stateLock.unlock() }
+        return systemRunning
+    }
 
     override init() {
         var cont: AsyncStream<AudioChunk>.Continuation!
         self.chunks = AsyncStream(bufferingPolicy: .bufferingNewest(64)) { cont = $0 }
         self.continuation = cont
+        var eventCont: AsyncStream<AudioCaptureEvent>.Continuation!
+        self.events = AsyncStream(bufferingPolicy: .bufferingNewest(32)) { eventCont = $0 }
+        self.eventsContinuation = eventCont
         super.init()
     }
 
@@ -44,36 +58,86 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
 
     // MARK: - Ciclo de vida
 
+    @MainActor
     func start(includeSystem: Bool, echoCancellation: Bool = false, captureOwnProcess: Bool = false) async throws {
         self.captureOwnProcess = captureOwnProcess
+        eventsContinuation.yield(.state(.self, .waiting))
         try startMic(echoCancellation: echoCancellation)
         if includeSystem {
+            setSystemDesired(true)
+            eventsContinuation.yield(.state(.other, .recovering))
             do {
                 try await startSystem()
             } catch {
                 // Sistema é opcional: se a permissão de gravação de tela faltar,
                 // seguimos só com o mic (mock interview de um lado).
                 log.error("Falha ao iniciar captura de sistema: \(error.localizedDescription, privacy: .public)")
+                eventsContinuation.yield(.state(.other, .unavailable))
             }
+        } else {
+            eventsContinuation.yield(.state(.other, .unavailable))
         }
     }
 
+    @MainActor
     func stop() {
         if micRunning {
             engine.inputNode.removeTap(onBus: 0)
             engine.stop()
             micRunning = false
         }
-        if let scStream {
-            scStream.stopCapture { _ in }
-            self.scStream = nil
-            systemRunning = false
-        }
+        setSystemDesired(false)
+        systemRecoveryTask?.cancel()
+        systemRecoveryTask = nil
+        stateLock.lock()
+        let stream = scStream
+        scStream = nil
+        systemRunning = false
+        stateLock.unlock()
+        stream?.stopCapture { _ in }
+        eventsContinuation.yield(.state(.self, .waiting))
+        eventsContinuation.yield(.state(.other, .waiting))
     }
 
+    @MainActor
     func finish() {
         stop()
         continuation.finish()
+        eventsContinuation.finish()
+    }
+
+    /// Reabre o mic sem AEC. É chamado automaticamente uma vez quando recebemos
+    /// apenas zero digital e também fica disponível pelo indicador da UI.
+    @MainActor
+    func restartMicWithoutAEC() throws {
+        eventsContinuation.yield(.state(.self, .recovering))
+        if micRunning {
+            engine.inputNode.removeTap(onBus: 0)
+            engine.stop()
+            micRunning = false
+        }
+        let input = engine.inputNode
+        if input.isVoiceProcessingEnabled {
+            try input.setVoiceProcessingEnabled(false)
+            engine.mainMixerNode.outputVolume = 1
+        }
+        signalMonitor.reset(.self)
+        try startMic(echoCancellation: false)
+    }
+
+    @MainActor
+    func restartSystemCapture() async {
+        setSystemDesired(true)
+        systemRecoveryTask?.cancel()
+        systemRecoveryTask = nil
+        systemRecoveryAttempt = 0
+        eventsContinuation.yield(.state(.other, .recovering))
+        do {
+            try await startSystem()
+        } catch {
+            log.error("Falha ao recuperar captura de sistema: \(error.localizedDescription, privacy: .public)")
+            scheduleSystemRecovery()
+        }
     }
 
     // MARK: - Mic (AVAudioEngine)
@@ -103,12 +167,19 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
         guard format.sampleRate > 0 else {
             throw CaptureError.noMicFormat
         }
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [continuation] buffer, _ in
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self, continuation] buffer, _ in
             guard let copy = buffer.deepCopy() else { return }
+            self?.observeSignal(in: copy, source: .self)
             continuation.yield(AudioChunk(source: .self, buffer: copy))
         }
         engine.prepare()
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            input.removeTap(onBus: 0)
+            engine.stop()
+            throw error
+        }
         micRunning = true
         log.info("Mic iniciado @ \(format.sampleRate, privacy: .public) Hz (AEC: \(echoCancellation, privacy: .public))")
     }
@@ -116,6 +187,7 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
     // MARK: - Sistema (ScreenCaptureKit)
 
     private func startSystem() async throws {
+        if isSystemActive { return }
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
         guard let display = content.displays.first else {
             throw CaptureError.noDisplay
@@ -142,8 +214,20 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
         // registramos e descartamos os frames (§ ver didOutputSampleBuffer).
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: scQueue)
         try await stream.startCapture()
-        self.scStream = stream
-        systemRunning = true
+        let keepRunning = stateLock.withLock {
+            if systemDesired {
+                self.scStream = stream
+                systemRunning = true
+            }
+            return systemDesired
+        }
+        guard keepRunning else {
+            try? await stream.stopCapture()
+            return
+        }
+        systemRecoveryAttempt = 0
+        signalMonitor.reset(.other)
+        eventsContinuation.yield(.state(.other, .active))
         log.info("Captura de sistema (ScreenCaptureKit) iniciada")
     }
 
@@ -152,6 +236,7 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .audio, sampleBuffer.isValid else { return }
         guard let pcm = AudioConverter.pcmBuffer(from: sampleBuffer) else { return }
+        observeSignal(in: pcm, source: .other)
         continuation.yield(AudioChunk(source: .other, buffer: pcm))
     }
 
@@ -159,7 +244,59 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
         log.error("SCStream parou com erro: \(error.localizedDescription, privacy: .public)")
+        stateLock.lock()
+        guard scStream === stream else {
+            stateLock.unlock()
+            return
+        }
+        scStream = nil
         systemRunning = false
+        let shouldRecover = systemDesired
+        stateLock.unlock()
+        eventsContinuation.yield(.state(.other, shouldRecover ? .recovering : .waiting))
+        guard shouldRecover else { return }
+        Task { @MainActor [weak self] in self?.scheduleSystemRecovery() }
+    }
+
+    // MARK: - Saúde e autorrecuperação
+
+    private func setSystemDesired(_ desired: Bool) {
+        stateLock.lock(); systemDesired = desired; stateLock.unlock()
+    }
+
+    private func wantsSystemCapture() -> Bool {
+        stateLock.lock(); defer { stateLock.unlock() }
+        return systemDesired
+    }
+
+    @MainActor
+    private func scheduleSystemRecovery() {
+        guard wantsSystemCapture(), systemRecoveryTask == nil else { return }
+        systemRecoveryAttempt += 1
+        guard systemRecoveryAttempt <= 5 else {
+            eventsContinuation.yield(.state(.other, .unavailable))
+            return
+        }
+        eventsContinuation.yield(.state(.other, .recovering))
+        let delay = min(Double(1 << (systemRecoveryAttempt - 1)), 8)
+        systemRecoveryTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .seconds(delay)) }
+            catch { return }
+            guard let self, self.wantsSystemCapture() else { return }
+            self.systemRecoveryTask = nil
+            do {
+                try await self.startSystem()
+            } catch {
+                self.log.error("Retry de captura de sistema falhou: \(error.localizedDescription, privacy: .public)")
+                self.scheduleSystemRecovery()
+            }
+        }
+    }
+
+    private func observeSignal(in buffer: AVAudioPCMBuffer, source: Speaker) {
+        for event in signalMonitor.observe(buffer, source: source) {
+            eventsContinuation.yield(event)
+        }
     }
 
     enum CaptureError: LocalizedError {

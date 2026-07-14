@@ -53,6 +53,18 @@ enum CoachModel: String, Codable, CaseIterable, Sendable, Identifiable {
         case .sonnet: return "Sonnet (rápido)"
         }
     }
+
+    /// Resolve uma preferência persistida sem deixar o app apontando para um
+    /// provedor indisponível quando o outro já está pronto.
+    static func resolved(
+        preferred: CoachModel,
+        claudeAvailable: Bool,
+        deepSeekAvailable: Bool
+    ) -> CoachModel {
+        if preferred.isDeepSeek, !deepSeekAvailable, claudeAvailable { return .sonnet }
+        if !preferred.isDeepSeek, !claudeAvailable, deepSeekAvailable { return .deepseekPro }
+        return preferred
+    }
 }
 
 enum SttSource: String, Codable, CaseIterable, Sendable, Identifiable {

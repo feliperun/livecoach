@@ -84,6 +84,7 @@ struct BriefEditor: View {
                             .textContentType(.password)
                             .onChange(of: deepseekKey) { _, new in
                                 DeepSeekCredential.setAPIKey(new)
+                                app.refreshBackendStatus()
                             }
                         TextField("Endpoint", text: $deepseekBaseURL, prompt: Text(DeepSeekCredential.defaultBaseURL))
                             .onChange(of: deepseekBaseURL) { _, new in
@@ -92,7 +93,7 @@ struct BriefEditor: View {
                     } header: {
                         Text("DeepSeek")
                     } footer: {
-                        Text("A key fica no Keychain do macOS, nunca em disco claro. Deixe o endpoint vazio para usar o oficial.")
+                        Text("A key fica no Keychain. Com DeepSeek, o brief/CV e o contexto recente são enviados diretamente ao endpoint configurado.")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }

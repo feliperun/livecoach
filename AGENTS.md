@@ -35,6 +35,7 @@ Critical guardrails for this repository — read before writing code or opening 
 
 ```bash
 xcodebuild -project CueMe.xcodeproj -scheme CueMe -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO
+xcodebuild -project CueMe.xcodeproj -scheme CueMe -destination 'platform=macOS' test
 sentrux check .
 sentrux gate .
 ```
@@ -62,7 +63,8 @@ Red → Green → Refactor → Commit.
 ### Check suite (runs on every push / PR)
 
 ```bash
-xcodebuild -project CueMe.xcodeproj -scheme CueMe -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO            # types + tests
+xcodebuild -project CueMe.xcodeproj -scheme CueMe -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO           # compile
+xcodebuild -project CueMe.xcodeproj -scheme CueMe -destination 'platform=macOS' test                                   # XCTest (signed test host)
 sentrux check .           # architectural rules (.sentrux/rules.toml)
 sentrux gate .            # no structural regression vs baseline
 ```
@@ -104,10 +106,10 @@ After a structural change, update `docs/ARCHITECTURE.md` and/or `docs/ABSTRACTIO
 
 ### CueMe-specific gotchas (hard-won — don't re-learn these)
 
-- **CI cannot build the app.** GitHub's `macos-latest` runner ships Xcode 16 /
-  macOS 15 SDK; CueMe needs macOS 26 (`SpeechAnalyzer`, `Translation`). The
-  `quality.yml` workflow only runs Sentrux — the `xcodebuild` gate above is
-  local/manual until GitHub ships a `macos-26` runner (see
+- **CI builds on `macos-26`.** The test host is ad-hoc signed in CI with an
+  empty development team; `CODE_SIGNING_ALLOWED=NO` is insufficient because a
+  hosted XCTest app must still be signed to launch. Keep the local build and
+  test commands above as the pre-push fast path (see
   [docs/PACKAGING.md](docs/PACKAGING.md)).
 - **`setVoiceProcessingEnabled(true)` on the mic input node wedged the process**
   (unkillable, survived `kill -9`, needed a machine reboot) when enabled without
@@ -160,6 +162,7 @@ CueMe/                    App target (see docs/ARCHITECTURE.md for the full brea
   Views/                  SwiftUI (compact window, history, brief editor, About)
   Assets.xcassets/        App icon, accent color
 CueMe.xcodeproj/          Xcode project (synchronized file group — no manual .pbxproj edits for new files)
+CueMeTests/               XCTest regressions (provider, parser, clocks, heuristics)
 scripts/package.sh        Local Release build → signed .dmg (see docs/PACKAGING.md)
 docs/
   adr/                    Architecture decision records (numbered, immutable)
@@ -167,7 +170,7 @@ docs/
   index.html              GitHub Pages landing site (docs/ is the Pages source)
   *.md                    Vision, architecture, abstractions, getting-started, packaging
 .sentrux/                 Structural quality gate config + baseline
-.github/workflows/        CI (quality.yml = Sentrux only; release-please.yml = releases)
+.github/workflows/        CI (quality.yml = build/tests + Sentrux; release-please.yml = releases)
 release-please-config.json, .release-please-manifest.json   Automated versioning
 ```
 
@@ -175,6 +178,7 @@ release-please-config.json, .release-please-manifest.json   Automated versioning
 
 ```bash
 xcodebuild -project CueMe.xcodeproj -scheme CueMe -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO
+xcodebuild -project CueMe.xcodeproj -scheme CueMe -destination 'platform=macOS' test
 sentrux check . && sentrux gate .
 ./scripts/package.sh      # Release build → dist/CueMe-<version>.dmg (run on a Mac; see docs/PACKAGING.md)
 ```

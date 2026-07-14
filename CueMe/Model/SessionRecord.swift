@@ -7,6 +7,7 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
 
     let id: UUID
     var startedAt: Date
+    var recordingStartedAt: Date?
     var endedAt: Date
     var mode: Mode
     var training: Bool
@@ -22,6 +23,7 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
     init(
         id: UUID = UUID(),
         startedAt: Date,
+        recordingStartedAt: Date? = nil,
         endedAt: Date = Date(),
         mode: Mode,
         training: Bool,
@@ -36,6 +38,7 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
     ) {
         self.id = id
         self.startedAt = startedAt
+        self.recordingStartedAt = recordingStartedAt
         self.endedAt = endedAt
         self.mode = mode
         self.training = training
@@ -54,6 +57,7 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
         startedAt = try c.decode(Date.self, forKey: .startedAt)
+        recordingStartedAt = try c.decodeIfPresent(Date.self, forKey: .recordingStartedAt)
         endedAt = try c.decode(Date.self, forKey: .endedAt)
         mode = try c.decode(Mode.self, forKey: .mode)
         training = try c.decode(Bool.self, forKey: .training)
@@ -68,6 +72,7 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
     }
 
     var duration: TimeInterval { max(0, endedAt.timeIntervalSince(startedAt)) }
+    var audioTimelineStart: Date { recordingStartedAt ?? startedAt }
 
     /// Título: primeira pergunta do interlocutor, senão modo + treino.
     var title: String {

@@ -14,6 +14,7 @@ struct RootView: View {
 
         VStack(spacing: 0) {
             HeaderBar()
+            CaptureHealthAlert()
 
             if app.brief.mode.isPassive {
                 MeetingPanel()
@@ -66,7 +67,9 @@ private struct CollapsiblePanels: View {
             PanelToggle(
                 title: "Resumo",
                 icon: "list.bullet.rectangle",
-                badge: app.summaryBullets.isEmpty ? nil : "\(app.summaryBullets.count)",
+                badge: app.summaryBackendError != nil
+                    ? "!"
+                    : (app.summaryBullets.isEmpty ? nil : "\(app.summaryBullets.count)"),
                 isExpanded: $app.showSummary
             ) {
                 SummaryPane().frame(height: 130)
@@ -133,30 +136,19 @@ struct QuestionBanner: View {
 
     var body: some View {
         if let q = app.currentQuestion {
-            HStack(alignment: .top, spacing: 10) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Theme.brand)
-                    .frame(width: 3)
-
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("ELE DISSE")
-                        .font(.system(size: 9, weight: .heavy, design: .rounded))
-                        .tracking(1.2)
-                        .foregroundStyle(Theme.violet)
-                    Text(q.text)
-                        .font(.system(size: 15, weight: .semibold))
-                        .lineSpacing(1)
-                        .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if app.brief.isForeign, let t = q.translation, !t.isEmpty {
-                        Text(Highlighter.translation(t, native: app.brief.nativeLang, keyterms: app.brief.keyterms, base: 14))
-                            .lineLimit(3)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+            HStack(alignment: .center, spacing: 9) {
+                Image(systemName: "quote.bubble.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Theme.violet)
+                Text(displayText(for: q))
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .lineSpacing(1)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
-            .padding(12)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.violet.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
             .overlay(
@@ -165,7 +157,15 @@ struct QuestionBanner: View {
             )
             .transition(.opacity.combined(with: .scale(scale: 0.98)))
             .animation(.spring(duration: 0.3), value: q.id)
+            .help(q.text)
         }
+    }
+
+    private func displayText(for line: TranscriptLine) -> String {
+        if app.brief.isForeign, let translation = line.translation, !translation.isEmpty {
+            return translation
+        }
+        return line.text
     }
 }
 

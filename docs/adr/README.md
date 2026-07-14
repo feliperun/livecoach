@@ -60,3 +60,7 @@ proposed → active → superseded
 | [0011](0011-expert-coach-persona-and-playbooks.md) | Expert coach persona + per-mode playbooks | active |
 | [0012](0012-meeting-mode-and-synced-recording.md) | Meeting mode + timestamp-synced audio recording | active |
 | [0013](0013-deepseek-coach-via-direct-api.md) | DeepSeek coach via direct API (opt-in, keyed) | active |
+| [0014](0014-per-channel-capture-health.md) | Per-channel capture health and self-recovery | active |
+| [0015](0015-glance-first-live-ui.md) | Glance-first live coaching UI | active |
+| [0016](0016-observable-non-cancelling-coach-lanes.md) | Observable, non-cancelling coach lanes | active |
+| [0017](0017-fast-coach-two-speed.md) | Two-speed Fast Coach with an instant local cue | active |

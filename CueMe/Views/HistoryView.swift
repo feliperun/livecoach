@@ -161,14 +161,14 @@ private struct SessionDetailView: View {
     /// Linha da transcrição correspondente ao instante de reprodução atual.
     private var activeLineID: UUID? {
         guard player.currentTime > 0 else { return nil }
-        let target = record.startedAt.addingTimeInterval(player.currentTime)
+        let target = record.audioTimelineStart.addingTimeInterval(player.currentTime)
         return record.transcript
             .filter { $0.isFinal && $0.ts <= target }
             .max(by: { $0.ts < $1.ts })?.id
     }
 
     private func seek(to line: TranscriptLine) {
-        player.seek(to: line.ts.timeIntervalSince(record.startedAt))
+        player.seek(to: line.ts.timeIntervalSince(record.audioTimelineStart))
         if !player.isPlaying { player.play() }
     }
 

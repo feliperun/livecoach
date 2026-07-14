@@ -17,10 +17,19 @@ struct HeaderBar: View {
                 .foregroundStyle(app.isRunning ? .primary : .secondary)
                 .lineLimit(1)
 
-            if app.isRunning {
-                CaptureBadge(active: app.systemCaptureActive) {
-                    app.openScreenRecordingSettings()
-                }
+            if app.isRunning || app.sessionState == .preparing {
+                ChannelHealthButton(
+                    icon: "mic.fill",
+                    state: app.micCaptureState,
+                    level: app.micLevel,
+                    repair: app.repairMicrophone
+                )
+                ChannelHealthButton(
+                    icon: "headphones",
+                    state: app.systemCaptureState,
+                    level: app.systemLevel,
+                    repair: app.repairSystemCapture
+                )
                 if app.recordAudio {
                     RecDot()
                 }
@@ -28,44 +37,28 @@ struct HeaderBar: View {
 
             Spacer()
 
-            Toggle(isOn: $app.trainingMode) {
-                Image(systemName: app.trainingMode ? "graduationcap.fill" : "graduationcap")
+            if app.isRunning {
+                Toggle(isOn: Binding(get: { app.silenceMode }, set: { _ in app.toggleSilence() })) {
+                    Image(systemName: app.silenceMode ? "moon.fill" : "moon")
+                }
+                .toggleStyle(.button)
+                .buttonStyle(IconButtonStyle(isOn: app.silenceMode))
+                .help("Pausar dicas")
             }
-            .toggleStyle(.button)
-            .buttonStyle(IconButtonStyle(isOn: app.trainingMode))
-            .disabled(app.isRunning)
-            .help("Modo treino: entrevistador por voz lê a pauta + CV e faz perguntas. Ligue antes de Iniciar.")
 
-            Toggle(isOn: $app.pinned) {
-                Image(systemName: app.pinned ? "pin.fill" : "pin")
-            }
-            .toggleStyle(.button)
-            .buttonStyle(IconButtonStyle(isOn: app.pinned))
-            .help("Janela sempre no topo")
-
-            Toggle(isOn: Binding(get: { app.silenceMode }, set: { _ in app.toggleSilence() })) {
-                Image(systemName: app.silenceMode ? "moon.fill" : "moon")
-            }
-            .toggleStyle(.button)
-            .buttonStyle(IconButtonStyle(isOn: app.silenceMode))
-            .help("Modo silêncio: pausa o coach, mantém a transcrição")
-
-            Button {
-                app.showHistory = true
+            Menu {
+                Toggle("Sempre no topo", isOn: $app.pinned)
+                Toggle("Modo treino", isOn: $app.trainingMode)
+                    .disabled(app.isSessionBusy || app.brief.mode.isPassive)
+                Divider()
+                Button("Histórico") { app.showHistory = true }
+                Button("Configurar sessão") { app.showSettings = true }
+                    .disabled(app.isSessionBusy)
             } label: {
-                Image(systemName: "clock.arrow.circlepath")
+                Image(systemName: "ellipsis")
             }
             .buttonStyle(IconButtonStyle())
-            .help("Histórico de sessões")
-
-            Button {
-                app.showSettings = true
-            } label: {
-                Image(systemName: "slider.horizontal.3")
-            }
-            .buttonStyle(IconButtonStyle())
-            .help("Brief da sessão: modo, idiomas, modelo, CV")
-            .disabled(app.isRunning)
+            .help("Mais")
 
             if app.isRunning || !app.transcript.isEmpty || !app.coachCards.isEmpty {
                 Button {
@@ -76,17 +69,102 @@ struct HeaderBar: View {
                 .buttonStyle(IconButtonStyle())
                 .help("Nova sessão: encerra a atual (salva no histórico) e começa uma limpa")
                 .keyboardShortcut("n", modifiers: [.command])
-                .disabled(app.sessionState == .preparing)
+                .disabled(app.sessionState == .preparing || app.sessionState == .stopping)
             }
 
-            Button(app.isRunning ? "Parar" : "Iniciar") {
+            Button(app.sessionState == .stopping ? "Salvando" : (app.isRunning ? "Parar" : "Iniciar")) {
                 app.isRunning ? app.stop() : app.start()
             }
             .buttonStyle(PrimaryButtonStyle(danger: app.isRunning))
             .keyboardShortcut(.return, modifiers: [.command])
+            .disabled(app.sessionState == .preparing || app.sessionState == .stopping)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
+    }
+}
+
+/// Só aparece quando há degradação. Poucas palavras + ação direta.
+struct CaptureHealthAlert: View {
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        if app.isRunning, let issue {
+            Button(action: issue.repair) {
+                HStack(spacing: 7) {
+                    Image(systemName: issue.icon)
+                    Text(issue.label)
+                        .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                    Spacer()
+                    Image(systemName: "arrow.clockwise")
+                }
+                .foregroundStyle(issue.color)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(issue.color.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 4)
+        }
+    }
+
+    private var issue: (label: String, icon: String, color: Color, repair: () -> Void)? {
+        switch app.micCaptureState {
+        case .silent: return ("MIC SEM SINAL", "mic.slash.fill", Theme.rose, app.repairMicrophone)
+        case .unavailable: return ("MIC DESCONECTADO", "mic.slash.fill", Theme.rose, app.repairMicrophone)
+        case .recovering: return ("RECUPERANDO MIC", "arrow.clockwise", Theme.amber, {})
+        default: break
+        }
+        switch app.systemCaptureState {
+        case .unavailable: return ("ÁUDIO EXTERNO OFF", "headphones", Theme.amber, app.repairSystemCapture)
+        case .recovering: return ("RECONECTANDO ÁUDIO", "arrow.clockwise", Theme.amber, {})
+        default: return nil
+        }
+    }
+}
+
+private struct ChannelHealthButton: View {
+    let icon: String
+    let state: CaptureChannelState
+    let level: Float
+    let repair: () -> Void
+
+    var body: some View {
+        Button(action: { if state == .silent || state == .unavailable { repair() } }) {
+            HStack(spacing: 3) {
+                Image(systemName: icon).font(.system(size: 9, weight: .bold))
+                ForEach(0..<3, id: \.self) { index in
+                    Capsule()
+                        .fill(color.opacity(level > Float(index) / 3 ? 1 : 0.2))
+                        .frame(width: 2.5, height: CGFloat(4 + index * 2))
+                }
+            }
+            .foregroundStyle(color)
+            .padding(.horizontal, 6)
+            .frame(height: 24)
+            .background(color.opacity(0.11), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+
+    private var color: Color {
+        switch state {
+        case .active: return Theme.mint
+        case .waiting, .recovering: return Theme.amber
+        case .silent, .unavailable: return Theme.rose
+        }
+    }
+
+    private var help: String {
+        switch state {
+        case .active: return "Canal ativo"
+        case .waiting: return "Aguardando sinal"
+        case .recovering: return "Reconectando"
+        case .silent: return "Sem sinal — clique para reparar"
+        case .unavailable: return "Indisponível — clique para reparar"
+        }
     }
 }
 
@@ -94,41 +172,61 @@ struct HeaderBar: View {
 struct InputBar: View {
     @Environment(AppModel.self) private var app
     @FocusState private var focused: Bool
+    @State private var expanded = false
 
     var body: some View {
         @Bindable var app = app
 
-        HStack(spacing: 8) {
-            Image(systemName: "sparkle")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.cyan.opacity(0.8))
-            TextField("Pergunta rápida pro coach…", text: $app.manualInput)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .focused($focused)
-                .onSubmit { app.ask() }
-            Button {
-                app.ask()
-            } label: {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Color.black.opacity(0.85))
-                    .frame(width: 22, height: 22)
-                    .background(Theme.brand, in: Circle())
-                    .opacity(sendDisabled ? 0.3 : 1)
+        Group {
+            if expanded {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.cyan.opacity(0.8))
+                    TextField("Pergunte ao coach", text: $app.manualInput)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                        .focused($focused)
+                        .onSubmit { app.ask(); expanded = false }
+                    Button {
+                        app.ask()
+                        expanded = false
+                    } label: {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color.black.opacity(0.85))
+                            .frame(width: 22, height: 22)
+                            .background(Theme.brand, in: Circle())
+                            .opacity(sendDisabled ? 0.3 : 1)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(sendDisabled)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.05), in: Capsule())
+                .overlay(
+                    Capsule().strokeBorder(
+                        focused ? Theme.cyan.opacity(0.5) : Theme.surfaceStroke,
+                        lineWidth: 1
+                    )
+                )
+            } else {
+                Button {
+                    expanded = true
+                    focused = true
+                } label: {
+                    Label("Perguntar", systemImage: "sparkle")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.white.opacity(0.04), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut("k", modifiers: [.command])
             }
-            .buttonStyle(.plain)
-            .disabled(sendDisabled)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color.white.opacity(0.05), in: Capsule())
-        .overlay(
-            Capsule().strokeBorder(
-                focused ? Theme.cyan.opacity(0.5) : Theme.surfaceStroke,
-                lineWidth: 1
-            )
-        )
         .padding(.horizontal, 12)
         .padding(.bottom, 10)
     }
@@ -138,7 +236,6 @@ struct InputBar: View {
     }
 }
 
-/// Estado da captura do interlocutor. Clicável quando falta permissão.
 /// Indicador discreto de que o áudio original está sendo gravado.
 private struct RecDot: View {
     var body: some View {
@@ -150,29 +247,5 @@ private struct RecDot: View {
         .padding(.horizontal, 7).padding(.vertical, 3)
         .background(Theme.rose.opacity(0.13), in: Capsule())
         .help("Gravando o áudio original desta sessão.")
-    }
-}
-
-private struct CaptureBadge: View {
-    let active: Bool
-    let fix: () -> Void
-
-    var body: some View {
-        Button(action: { if !active { fix() } }) {
-            HStack(spacing: 4) {
-                Image(systemName: active ? "headphones" : "exclamationmark.triangle.fill")
-                    .font(.system(size: 9))
-                Text(active ? "Interlocutor" : "Só você — corrigir")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-            }
-            .foregroundStyle(active ? Theme.mint : Theme.amber)
-            .padding(.horizontal, 8).padding(.vertical, 3)
-            .background((active ? Theme.mint : Theme.amber).opacity(0.13), in: Capsule())
-            .overlay(Capsule().strokeBorder((active ? Theme.mint : Theme.amber).opacity(0.35), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .help(active
-              ? "Capturando o áudio do interlocutor (sistema)."
-              : "Sem áudio de sistema. Clique pra abrir Ajustes → Gravação de Tela e Áudio do Sistema, aprove o CueMe e reinicie a sessão.")
     }
 }

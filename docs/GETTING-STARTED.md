@@ -5,8 +5,8 @@
 - **macOS 26 (Tahoe)** — `SpeechAnalyzer`/`SpeechTranscriber` and the
   `Translation` framework don't exist on older SDKs.
 - **Xcode 26** (Swift 6.2 toolchain).
-- **Claude Code CLI**, installed and logged in — the coach/summary brain shells
-  out to `claude -p`. No API key needed or used.
+- **Claude Code CLI**, installed and logged in — the default coach and summary
+  shell out to `claude -p`. No Anthropic API key is needed.
   ```bash
   claude --version   # prints a version if installed
   claude -p "hi"     # answers if you're logged in
@@ -28,22 +28,22 @@ open cueme/CueMe.xcodeproj
 ```
 
 No package manager, no dependencies to install, no `.env` — the project has
-zero third-party dependencies (100% native frameworks) and no secrets to
-configure. First launch prompts for Microphone (required) and, if you want the
+zero third-party dependencies (100% native frameworks). DeepSeek is optional;
+its API key is stored in Keychain when selected. First launch prompts for Microphone (required) and, if you want the
 other side of the conversation, Screen & System Audio Recording (optional).
 
 ## Daily commands
 
 ```bash
 xcodebuild -project CueMe.xcodeproj -scheme CueMe -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO
+xcodebuild -project CueMe.xcodeproj -scheme CueMe -destination 'platform=macOS' test # signed host required
 sentrux check .           # architectural rules
 sentrux gate .            # no structural regression
 ```
 
-Note: this build gate is **local only** — GitHub's CI runners don't yet have the
-macOS 26 SDK, so `.github/workflows/quality.yml` runs Sentrux alone. Don't skip
-the local `xcodebuild` before committing; nothing else in the pipeline catches a
-broken build. See [AGENTS.md § CueMe-specific gotchas](../AGENTS.md#3b-cueme-specific-gotchas-hard-won--dont-re-learn-these).
+GitHub CI repeats the build and XCTest suite on a `macos-26` runner, then runs
+the Sentrux structural gates. Keep the local checks as the fast feedback path
+before pushing. See [AGENTS.md § CueMe-specific gotchas](../AGENTS.md#3b-cueme-specific-gotchas-hard-won--dont-re-learn-these).
 
 ## Packaging a build
 

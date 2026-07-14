@@ -8,9 +8,16 @@ struct SummaryPane: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 5) {
                 if app.summaryBullets.isEmpty {
-                    Text("O resumo aparece após ~30s de conversa.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+                    if let error = app.summaryBackendError {
+                        Label("Resumo offline", systemImage: "exclamationmark.circle.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.rose)
+                            .help(error)
+                    } else {
+                        Text("Anotando…")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
                 } else {
                     ForEach(Array(app.summaryBullets.enumerated()), id: \.offset) { _, bullet in
                         HStack(alignment: .top, spacing: 5) {

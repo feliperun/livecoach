@@ -21,8 +21,10 @@ lanes, not the whole app.
 
 **Add a DeepSeek backend that speaks the OpenAI-compatible `/chat/completions`
 endpoint directly over HTTP (SSE streaming), behind the same `CoachSession`
-abstraction as the CLI.** It is opt-in via the live-coach model picker
-(`deepseek-v4-pro` default, `deepseek-v4-flash` for the manual/fast lane).
+abstraction as the CLI.** It is opt-in via the coach model picker. As refined by
+[0017](0017-fast-coach-two-speed.md), `deepseek-v4-flash` serves the latency-critical
+live and summary lanes, while the selected Pro tier is reserved for manual asks. The
+keyless Sonnet/Claude CLI lane remains the product default.
 
 Latency-first choices for live use:
 
@@ -38,7 +40,8 @@ Latency-first choices for live use:
 The API key lives in the **macOS Keychain** (`CueMe.deepseek`), never in
 `brief.json` or the repo, with a `DEEPSEEK_API_KEY` env fallback for
 Xcode/terminal runs. The endpoint base URL is user-configurable (defaults to the
-official one). Summary and the Claude tiers are unchanged and still keyless.
+official one). When DeepSeek is selected, summary uses a separate DeepSeek Flash
+session instead of silently depending on the Claude CLI.
 
 ## Options considered
 
@@ -61,5 +64,5 @@ official one). Summary and the Claude tiers are unchanged and still keyless.
   we rely on the vendor's context cache and the bounded coach window instead.
 - Coach output parsing is backend-agnostic — the `CoachSession` protocol yields
   text deltas regardless of provider, so `CoachCardParser` is untouched.
-- If the key is missing/invalid, the DeepSeek lane fails that turn (surfaced as a
-  coach error); the Claude lanes and summary keep working.
+- If the key is missing/invalid, the DeepSeek coach and summary lanes surface a
+  compact error; the Claude lanes remain independent.

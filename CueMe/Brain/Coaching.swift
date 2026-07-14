@@ -3,8 +3,8 @@ import Foundation
 /// Raia de coaching: Sonnet (ou Opus para input manual "deep"), streaming e cancelável.
 /// Emite `CoachCard` progressivamente conforme o modelo gera.
 final class CoachingLane: Sendable {
-    private let live: (any CoachSession)?     // modelo escolhido (DeepSeek Pro default) — turno ao vivo
-    private let manualS: (any CoachSession)?  // input manual (tier rápido)
+    private let live: (any CoachSession)?     // modelo escolhido — turno ao vivo
+    private let manualS: (any CoachSession)?  // input manual (tier escolhido/profundo)
 
     init(live: (any CoachSession)?, manual: (any CoachSession)?) {
         self.live = live
@@ -17,7 +17,9 @@ final class CoachingLane: Sendable {
         window: [Turn],
         latest: String,
         manual: Bool,
-        speakerCertain: Bool = true
+        speakerCertain: Bool = true,
+        cardID: UUID = UUID(),
+        initialGuide: String? = nil
     ) -> AsyncThrowingStream<CoachCard, Error> {
         AsyncThrowingStream { continuation in
             guard let session = manual ? (manualS ?? live) : live else {
@@ -25,11 +27,15 @@ final class CoachingLane: Sendable {
                 return
             }
             let user = Prompts.coachUser(window: window, latest: latest, manual: manual, speakerCertain: speakerCertain)
-            let cardID = UUID()
 
-            // Frame instantâneo: mostra o card "pensando…" no gatilho (antes do 1º token)
-            // → reduz a latência percebida. Preenche conforme os tokens chegam.
-            continuation.yield(CoachCard(id: cardID, kind: manual ? .manual : .answer, isStreaming: true))
+            // O coordinator pode ter mostrado uma dica local antes da chamada. Reusa
+            // o mesmo id para a resposta remota substituir o frame, sem criar outro card.
+            continuation.yield(CoachCard(
+                id: cardID,
+                guidePT: initialGuide ?? "",
+                kind: manual ? .manual : .answer,
+                isStreaming: true
+            ))
 
             let task = Task {
                 var accumulated = ""
@@ -44,14 +50,57 @@ final class CoachingLane: Sendable {
                     }
                     if let final = CoachCardParser.parse(accumulated, id: cardID, manual: manual, streaming: false) {
                         continuation.yield(final)
+                    } else {
+                        // `NADA`/resposta inválida precisa substituir a dica local por
+                        // um card vazio; o coordinator então a remove em vez de deixá-la stale.
+                        continuation.yield(CoachCard(
+                            id: cardID,
+                            kind: manual ? .manual : .answer,
+                            isStreaming: false
+                        ))
                     }
                     continuation.finish()
                 } catch {
+                    continuation.yield(CoachCard(
+                        id: cardID,
+                        kind: manual ? .manual : .answer,
+                        isStreaming: false
+                    ))
                     continuation.finish(throwing: error)
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+}
+
+/// Primeira ajuda, calculada localmente e sem rede. Não tenta responder; só oferece
+/// um playbook visual enquanto a frase pronta chega por streaming.
+@MainActor
+enum InstantCue {
+    static func label(for text: String, mode: Mode) -> String? {
+        let lower = text.lowercased()
+        guard SessionCoordinator.looksLikeQuestion(text) else { return nil }
+
+        if lower.hasPrefix("tell me") || lower.hasPrefix("describe")
+            || lower.contains("a time when") || lower.contains("uma vez que") {
+            return "⭐ STAR"
+        }
+        if lower.hasPrefix("how") || lower.hasPrefix("como")
+            || lower.contains("walk me through") {
+            return "🧭 3 passos"
+        }
+        if lower.hasPrefix("why") || lower.hasPrefix("por que") {
+            return "🎯 Motivo → encaixe"
+        }
+        if lower.contains("impact") || lower.contains("result")
+            || lower.contains("metric") || lower.contains("resultado") {
+            return "📈 Resultado + número"
+        }
+        if mode == .sales, lower.contains("price") || lower.contains("preço") {
+            return "💎 Valor antes do preço"
+        }
+        return "💡 Manchete primeiro"
     }
 }
 
@@ -98,8 +147,9 @@ enum CoachCardParser {
                 .filter { !$0.isEmpty }
         }
 
-        // Durante streaming, GUIA pode ainda estar vazio — só emite quando há algo útil.
-        if streaming && guide.isEmpty && sayConv == nil { return nil }
+        // Nunca materializa prosa fora do contrato ou uma resposta vazia como card.
+        // Isso evita placeholders "finalizados" sem nenhuma dica visível.
+        if guide.isEmpty && sayConv == nil && sayNative.isEmpty { return nil }
 
         return CoachCard(
             id: id,

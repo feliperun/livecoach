@@ -54,7 +54,7 @@ struct AboutView: View {
             Divider().padding(.horizontal, 24)
 
             VStack(spacing: 3) {
-                Text("100% Swift nativo · macOS 26 · on-device · sem API keys")
+                Text("Swift nativo · macOS 26 · Claude keyless · DeepSeek opcional")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.tertiary)
                 Text("MIT · Construído com Swift + Claude Code")

@@ -23,7 +23,8 @@ actor MeetingRecorder {
     private var selfFrames: AVAudioFramePosition = 0
     private var otherFrames: AVAudioFramePosition = 0
 
-    func start(directory: URL) throws {
+    @discardableResult
+    func start(directory: URL) throws -> Date {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let settings = Self.format.settings
         selfFile = try AVAudioFile(
@@ -34,10 +35,12 @@ actor MeetingRecorder {
             forWriting: directory.appendingPathComponent(MeetingRecording.otherFilename),
             settings: settings, commonFormat: .pcmFormatInt16, interleaved: true
         )
-        recordingStart = Date()
+        let startedAt = Date()
+        recordingStart = startedAt
         selfFrames = 0
         otherFrames = 0
         log.info("Gravação iniciada em \(directory.lastPathComponent, privacy: .public)")
+        return startedAt
     }
 
     func ingest(_ chunk: AudioChunk) {

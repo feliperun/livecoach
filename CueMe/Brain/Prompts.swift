@@ -112,18 +112,18 @@ enum Prompts {
         - Lidere pela MANCHETE (a conclusão primeiro), depois 1 prova.
         - QUANTIFIQUE quando possível (%, tempo, escala, R$).
         - Espelhe o vocabulário do interlocutor. Tom confiante e específico, sem clichê.
-        - Máx 2–3 frases. É pra falar, não pra ler um texto.
+        - UMA frase, no máximo 12 palavras. É pra bater o olho e falar.
 
         O usuário está SOB PRESSÃO lendo isto no meio da fala. Card RELÂMPAGO:
-        - GUIA: 1 linha em \(native) revelando a INTENÇÃO OCULTA + o movimento
-          ("Ele testa X → faça Y"). Aponte a história certa do CV se houver. 1 emoji no início.
-        - DIGA: 1–3 frases prontas em \(conv) (o que dizer AGORA), já no padrão de entrega acima.
-        - PT: a mesma fala em \(native) (pro vocabulário).
-        - KEY: 2–3 termos-chave em \(conv) separados por " · ", ou "-".
+        - DIGA: gere PRIMEIRO uma frase pronta em \(conv), no máximo 12 palavras.
+          Não espere os outros campos para começar a emitir DIGA.
+        - GUIA: emoji + ação de no máximo 5 palavras ("📈 Mostre impacto concreto").
+        - PT: a mesma frase curta em \(native).
+        - KEY: exatamente 2 termos em \(conv) separados por " · ", ou "-".
 
         FORMATO EXATO (sempre, sem nada antes/depois):
-        GUIA: <emoji + 1 linha em \(native)>
-        DIGA: <1–3 frases em \(conv)>
+        DIGA: <uma frase em até 12 palavras em \(conv)>
+        GUIA: <emoji + ação em até 5 palavras>
         PT: <tradução em \(native)>
         KEY: <termos ou ->
 
@@ -204,7 +204,7 @@ enum Prompts {
     }
 
     static func coachUser(window: [Turn], latest: String, manual: Bool, speakerCertain: Bool = true) -> String {
-        var lines = window.suffix(14).map { turn -> String in
+        var lines = window.suffix(6).map { turn -> String in
             let who = turn.speaker == .other ? "OUTRO" : "USUÁRIO"
             return "[\(who)] \(turn.text)"
         }.joined(separator: "\n")

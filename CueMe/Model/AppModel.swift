@@ -11,6 +11,8 @@ final class AppModel {
     var transcript: [TranscriptLine] = []
     var summaryBullets: [String] = []
     var coachCards: [CoachCard] = []
+    var activeCoachCardID: UUID?
+    private var dismissedCoachCardIDs: Set<UUID> = []
     var sessionState: SessionState = .idle
 
     var brief: SessionBrief {
@@ -18,7 +20,7 @@ final class AppModel {
     }
 
     var sttSource: SttSource = .native
-    var coachModel: CoachModel = .deepseekPro {   // default DeepSeek V4 Pro; persiste entre sessões
+    var coachModel: CoachModel = .sonnet {        // default keyless; DeepSeek é opt-in
         didSet { UserDefaults.standard.set(coachModel.rawValue, forKey: Self.coachModelKey) }
     }
     private static let coachModelKey = "coachModel"
@@ -27,8 +29,16 @@ final class AppModel {
     var recordAudio: Bool = true           // grava o áudio original sincronizado (default ligado)
     var manualInput: String = ""
     var silenceMode: Bool = false          // pausa o coach, mantém transcript
-    var backendAvailable: Bool             // Claude Code CLI encontrado?
+    private(set) var claudeAvailable = false
+    private(set) var deepSeekAvailable = false
+    var coachBackendReady = false
+    var coachBackendError: String?
+    var summaryBackendError: String?
     var systemCaptureActive: Bool = false  // ScreenCaptureKit capturando o interlocutor?
+    var micCaptureState: CaptureChannelState = .waiting
+    var systemCaptureState: CaptureChannelState = .waiting
+    var micLevel: Float = 0
+    var systemLevel: Float = 0
 
     // UI compacta
     var pinned: Bool = false {             // janela sempre no topo
@@ -55,11 +65,23 @@ final class AppModel {
 
     init() {
         self.brief = BriefStore.load()
+        let hasClaude = ClaudeClient().isAvailable
+        let hasDeepSeek = DeepSeekCredential.isConfigured
+        self.claudeAvailable = hasClaude
+        self.deepSeekAvailable = hasDeepSeek
+
+        var selected: CoachModel = .sonnet
         if let raw = UserDefaults.standard.string(forKey: Self.coachModelKey),
            let saved = CoachModel(rawValue: raw) {
-            self.coachModel = saved
+            selected = saved
         }
-        self.backendAvailable = ClaudeClient().isAvailable || DeepSeekCredential.isConfigured
+        // Migração segura da v0.5: não deixa um provedor indisponível selecionado
+        // quando o outro já está pronto para uso.
+        self.coachModel = CoachModel.resolved(
+            preferred: selected,
+            claudeAvailable: hasClaude,
+            deepSeekAvailable: hasDeepSeek
+        )
         translationPipe.onResult = { [weak self] id, text in
             Task { @MainActor in self?.setTranslation(lineID: id, translation: text) }
         }
@@ -90,11 +112,23 @@ final class AppModel {
         return false
     }
 
+    var isSessionBusy: Bool {
+        switch sessionState {
+        case .preparing, .running, .stopping: return true
+        default: return false
+        }
+    }
+
+    var backendAvailable: Bool {
+        coachModel.isDeepSeek ? deepSeekAvailable : claudeAvailable
+    }
+
     var statusText: String {
         switch sessionState {
         case .idle: return "Pronto"
         case .preparing: return "Preparando…"
         case .running: return "Ao vivo"
+        case .stopping: return "Salvando…"
         case .paused: return "Pausado"
         case .error(let m): return "Erro: \(m)"
         }
@@ -106,15 +140,40 @@ final class AppModel {
         return transcript.first(where: { $0.id == id })
     }
 
+    var activeCoachCard: CoachCard? {
+        guard let activeCoachCardID else { return nil }
+        return coachCards.first(where: { $0.id == activeCoachCardID })
+    }
+
     // MARK: - Comandos
 
     func start() {
-        guard !isRunning, sessionState != .preparing else { return }
+        guard !isSessionBusy else { return }
+        guard brief.mode.isPassive || backendAvailable else {
+            sessionState = .error(coachModel.isDeepSeek
+                ? "Configure a chave da DeepSeek."
+                : "Claude Code CLI não encontrado.")
+            showSettings = true
+            return
+        }
         // Sessão nova: limpa os painéis (o snapshot da anterior já foi salvo no stop).
         transcript = []
         coachCards = []
+        activeCoachCardID = nil
+        dismissedCoachCardIDs = []
         summaryBullets = []
         currentQuestionID = nil
+        showTranscript = false
+        showSummary = false
+        silenceMode = false
+        micCaptureState = .waiting
+        systemCaptureState = .waiting
+        micLevel = 0
+        systemLevel = 0
+        systemCaptureActive = false
+        coachBackendReady = false
+        coachBackendError = nil
+        summaryBackendError = nil
         sessionStartedAt = Date()
         currentSessionID = UUID()
         let coord = SessionCoordinator(app: self)
@@ -123,12 +182,19 @@ final class AppModel {
     }
 
     func stop() {
+        guard sessionState != .stopping else { return }
         let coord = coordinator
-        coordinator = nil
-        sessionState = .idle
+        guard coord != nil else {
+            sessionState = .idle
+            return
+        }
+        sessionState = .stopping
         Task { @MainActor in
-            let duration = await coord?.stop()
-            self.saveSessionRecord(audioDuration: duration)
+            let result = await coord?.stop() ?? .empty
+            self.saveSessionRecord(stopResult: result)
+            self.coordinator = nil
+            self.activeCoachCardID = nil
+            self.sessionState = .idle
         }
     }
 
@@ -140,33 +206,35 @@ final class AppModel {
             return
         }
         let coord = coordinator
-        coordinator = nil
-        sessionState = .idle
+        sessionState = .stopping
         Task { @MainActor in
-            let duration = await coord?.stop()
-            self.saveSessionRecord(audioDuration: duration)
+            let result = await coord?.stop() ?? .empty
+            self.saveSessionRecord(stopResult: result)
+            self.coordinator = nil
+            self.sessionState = .idle
             self.start()
         }
     }
 
     /// Salva a sessão atual no histórico (se teve conteúdo).
-    private func saveSessionRecord(audioDuration: TimeInterval?) {
+    private func saveSessionRecord(stopResult: SessionStopResult) {
         defer { sessionStartedAt = nil; currentSessionID = nil }
         guard let startedAt = sessionStartedAt,
               !transcript.isEmpty || !coachCards.isEmpty else { return }
         let record = SessionRecord(
             id: currentSessionID ?? UUID(),
             startedAt: startedAt,
+            recordingStartedAt: stopResult.recordingStartedAt,
             mode: brief.mode,
             training: trainingMode,
             conversationLang: brief.conversationLang,
             nativeLang: brief.nativeLang,
             goal: brief.goal,
             transcript: transcript,
-            coachCards: coachCards.map { var c = $0; c.isStreaming = false; return c },
+            coachCards: coachCards.filter(\.hasContent).map { var c = $0; c.isStreaming = false; return c },
             summaryBullets: summaryBullets,
-            hasAudio: audioDuration != nil,
-            audioDuration: audioDuration ?? 0
+            hasAudio: stopResult.audioDuration != nil,
+            audioDuration: stopResult.audioDuration ?? 0
         )
         SessionStore.save(record)
         history.insert(record, at: 0)
@@ -191,7 +259,16 @@ final class AppModel {
     }
 
     func refreshBackendStatus() {
-        backendAvailable = ClaudeClient().isAvailable || DeepSeekCredential.isConfigured
+        claudeAvailable = ClaudeClient().isAvailable
+        deepSeekAvailable = DeepSeekCredential.isConfigured
+    }
+
+    func repairMicrophone() {
+        Task { [coordinator] in await coordinator?.repairMicrophone() }
+    }
+
+    func repairSystemCapture() {
+        Task { [coordinator] in await coordinator?.repairSystemCapture() }
     }
 
     /// Abre o painel de Gravação de Tela (pro áudio do interlocutor).
@@ -203,6 +280,20 @@ final class AppModel {
     private func applyPinned() {
         for window in NSApplication.shared.windows where window.isVisible {
             window.level = pinned ? .floating : .normal
+        }
+    }
+
+    func applyCaptureEvent(_ event: AudioCaptureEvent) {
+        switch event {
+        case .level(.self, let level): micLevel = level
+        case .level(.other, let level): systemLevel = level
+        case .state(.self, let state):
+            micCaptureState = state
+            if state != .active { micLevel = 0 }
+        case .state(.other, let state):
+            systemCaptureState = state
+            systemCaptureActive = state == .active
+            if state != .active { systemLevel = 0 }
         }
     }
 
@@ -258,10 +349,26 @@ final class AppModel {
         if coachCards.count > 30 {
             coachCards.removeFirst(coachCards.count - 30)
         }
+        if !dismissedCoachCardIDs.contains(card.id) {
+            activeCoachCardID = card.id
+        }
     }
 
     /// Remove cards sem conteúdo (ex.: placeholder que virou "NADA").
     func pruneEmptyCoachCards() {
-        coachCards.removeAll { $0.guidePT.isEmpty && ($0.sayConversation?.isEmpty ?? true) && $0.sayNative.isEmpty }
+        let removed = Set(coachCards.filter { !$0.hasContent }.map(\.id))
+        coachCards.removeAll { removed.contains($0.id) }
+        dismissedCoachCardIDs.subtract(removed)
+        if let activeCoachCardID, removed.contains(activeCoachCardID) {
+            self.activeCoachCardID = nil
+        }
+    }
+
+    /// A dica continua no histórico, mas sai da frente assim que o usuário começa
+    /// a responder. Atualizações tardias do mesmo stream não podem reativá-la.
+    func dismissActiveCoach() {
+        guard let activeCoachCardID else { return }
+        dismissedCoachCardIDs.insert(activeCoachCardID)
+        self.activeCoachCardID = nil
     }
 }

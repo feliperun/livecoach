@@ -19,6 +19,9 @@ actor ClaudeSession {
     private var process: Process?
     private var stdin: FileHandle?
     private var readerTask: Task<Void, Never>?
+    private var stderrTask: Task<Void, Never>?
+    private var turnTimeoutTask: Task<Void, Never>?
+    private var shuttingDown = false
 
     // Turno em andamento (só um por vez).
     private final class Turn: @unchecked Sendable {
@@ -42,9 +45,10 @@ actor ClaudeSession {
     // MARK: - Spawn
 
     private func startIfNeeded() throws {
+        guard !shuttingDown else { throw ClaudeSessionError.notRunning }
         if let p = process, p.isRunning { return }
 
-        let script = #"exec "$LC_CLAUDE" -p --model "$LC_MODEL" --system-prompt "$LC_SYS" --input-format stream-json --output-format stream-json --include-partial-messages --verbose --settings "$LC_SETTINGS""#
+        let script = #"exec "$LC_CLAUDE" -p --model "$LC_MODEL" --system-prompt "$LC_SYS" --input-format stream-json --output-format stream-json --include-partial-messages --verbose --tools "" --strict-mcp-config --mcp-config '{"mcpServers":{}}' --disable-slash-commands --no-chrome --no-session-persistence --setting-sources project,local --settings "$LC_SETTINGS""#
 
         var env = ProcessInfo.processInfo.environment
         env["LC_CLAUDE"] = cliPath
@@ -56,23 +60,25 @@ actor ClaudeSession {
         proc.executableURL = URL(fileURLWithPath: shell)
         proc.arguments = ["-lc", script]
         proc.environment = env
-        // cwd isolado e vazio: evita o CLI carregar CLAUDE.md/contexto de um projeto
-        // por acidente (vazaria contexto pessoal pro coach).
+        // cwd isolado + zero tools/MCP/plugins/user settings: evita carregar contexto
+        // pessoal e reduz drasticamente tokens/latência do processo de texto puro.
         let isolated = FileManager.default.temporaryDirectory.appendingPathComponent("CueMeCLI", isDirectory: true)
         try? FileManager.default.createDirectory(at: isolated, withIntermediateDirectories: true)
         proc.currentDirectoryURL = isolated
 
         let inPipe = Pipe()
         let outPipe = Pipe()
+        let errPipe = Pipe()
         proc.standardInput = inPipe
         proc.standardOutput = outPipe
-        proc.standardError = Pipe()
+        proc.standardError = errPipe
 
         try proc.run()
 
         self.process = proc
         self.stdin = inPipe.fileHandleForWriting
         let outHandle = outPipe.fileHandleForReading
+        let errHandle = errPipe.fileHandleForReading
 
         readerTask = Task { [weak self] in
             do {
@@ -83,6 +89,13 @@ actor ClaudeSession {
                 // pipe fechado / processo morreu
             }
             await self?.readerEnded()
+        }
+        // `claude --verbose` pode escrever bastante em stderr. Um Pipe sem leitor
+        // enche e bloqueia o processo filho; drenamos continuamente por segurança.
+        stderrTask = Task {
+            do {
+                for try await _ in errHandle.bytes.lines { }
+            } catch { }
         }
         log.info("ClaudeSession spawn (\(self.model, privacy: .public))")
     }
@@ -97,10 +110,8 @@ actor ClaudeSession {
 
     /// Aquece o processo (paga o cold start ANTES da conversa). Manda um turno
     /// trivial e descarta a resposta. Sistema prompt + CV já carregam no spawn.
-    nonisolated func prewarm() {
-        Task { [weak self] in
-            _ = try? await self?.complete("(aquecimento — se não houver nada a fazer responda apenas: NADA)")
-        }
+    func prewarm() async throws {
+        _ = try await complete("(aquecimento — se não houver nada a fazer responda apenas: NADA)")
     }
 
     /// Conveniência: coleta o stream inteiro num texto só (tradução/resumo).
@@ -141,6 +152,13 @@ actor ClaudeSession {
 
         let turn = Turn(continuation)
         current = turn
+        turnTimeoutTask?.cancel()
+        turnTimeoutTask = Task { [weak self, weak turn] in
+            do { try await Task.sleep(for: .seconds(60)) }
+            catch { return }
+            guard let turn else { return }
+            await self?.timeout(turn)
+        }
         continuation.onTermination = { [weak self, weak turn] _ in
             turn?.cancelled = true
             _ = self   // o gate é liberado quando chega o `result`
@@ -200,6 +218,8 @@ actor ClaudeSession {
 
     private func finishCurrent(throwing error: Error?) {
         guard let turn = current else { return }
+        turnTimeoutTask?.cancel()
+        turnTimeoutTask = nil
         current = nil
         if let error {
             turn.continuation.finish(throwing: error)
@@ -207,6 +227,15 @@ actor ClaudeSession {
             turn.continuation.finish()
         }
         release()
+    }
+
+    private func timeout(_ turn: Turn) {
+        guard current === turn else { return }
+        try? stdin?.close()
+        stdin = nil
+        if let process, process.isRunning { process.terminate() }
+        process = nil
+        finishCurrent(throwing: ClaudeSessionError.timedOut)
     }
 
     private func readerEnded() {
@@ -221,24 +250,38 @@ actor ClaudeSession {
     // MARK: - Shutdown
 
     func shutdown() {
+        shuttingDown = true
         readerTask?.cancel()
         readerTask = nil
+        stderrTask?.cancel()
+        stderrTask = nil
+        turnTimeoutTask?.cancel()
+        turnTimeoutTask = nil
         try? stdin?.close()
         stdin = nil
         if let p = process, p.isRunning { p.terminate() }
         process = nil
-        current = nil
+        if let turn = current {
+            current = nil
+            turn.continuation.finish(throwing: ClaudeSessionError.notRunning)
+        }
+        let queued = waiters
+        waiters.removeAll()
+        busy = false
+        for waiter in queued { waiter.resume() }
     }
 
     enum ClaudeSessionError: LocalizedError {
         case notRunning
         case encodeFailed
+        case timedOut
         case turnFailed(String)
 
         var errorDescription: String? {
             switch self {
             case .notRunning: return "Sessão do Claude CLI não está ativa."
             case .encodeFailed: return "Falha ao serializar a mensagem para o CLI."
+            case .timedOut: return "O Claude CLI não respondeu em 60 segundos."
             case .turnFailed(let m): return "Turno do Claude CLI falhou: \(m)"
             }
         }

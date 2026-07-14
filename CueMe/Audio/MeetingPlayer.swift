@@ -35,7 +35,10 @@ final class MeetingPlayer {
     func togglePlay() { isPlaying ? pause() : play() }
 
     func play() {
-        guard isReady, currentTime < duration - 0.05 || duration == 0 else { return }
+        guard isReady else { return }
+        if duration > 0, currentTime >= duration - 0.05 {
+            seek(to: 0)
+        }
         let anchor = (selfPlayer ?? otherPlayer)!.deviceCurrentTime + 0.08
         selfPlayer?.play(atTime: anchor)
         otherPlayer?.play(atTime: anchor)
