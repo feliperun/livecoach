@@ -59,7 +59,8 @@ jobs:
           xcrun notarytool submit "dist/CueMe-$VERSION.dmg" \
             --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APP_PASSWORD" --wait
           xcrun stapler staple "dist/CueMe-$VERSION.dmg"
-          shasum -a 256 "dist/CueMe-$VERSION.dmg" > "dist/CueMe-$VERSION.dmg.sha256"
+          cd dist
+          shasum -a 256 "CueMe-$VERSION.dmg" > "CueMe-$VERSION.dmg.sha256"
 
       - name: Install Sparkle tools
         env:
