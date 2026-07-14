@@ -3,6 +3,7 @@ import SwiftUI
 /// Header fino: status, captura do interlocutor, pin, silêncio, ajustes, iniciar/parar.
 struct HeaderBar: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var app = app
@@ -51,6 +52,10 @@ struct HeaderBar: View {
                 Toggle("Modo treino", isOn: $app.trainingMode)
                     .disabled(app.isSessionBusy || app.brief.mode.isPassive)
                 Divider()
+                Button("Camera Rail") { openWindow(id: "camera-rail") }
+                Button("Testar setup") { app.showPreflight = true }
+                    .disabled(app.isSessionBusy)
+                Button("Buscar atualizações…") { app.checkForUpdates() }
                 Button("Histórico") { app.showHistory = true }
                 Button("Configurar sessão") { app.showSettings = true }
                     .disabled(app.isSessionBusy)

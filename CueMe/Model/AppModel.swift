@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import AppKit
 import Translation
+import Sparkle
 
 /// Estado observável da UI. Só leitura pela view; as raias empurram atualizações
 /// pelo `@MainActor`. Comandos delegam ao `SessionCoordinator`.
@@ -11,6 +12,7 @@ final class AppModel {
     var transcript: [TranscriptLine] = []
     var summaryBullets: [String] = []
     var coachCards: [CoachCard] = []
+    var diagnostics = SessionDiagnostics()
     var activeCoachCardID: UUID?
     private var dismissedCoachCardIDs: Set<UUID> = []
     var sessionState: SessionState = .idle
@@ -48,6 +50,11 @@ final class AppModel {
     var showSummary: Bool = false
     var showSettings: Bool = false
     var showHistory: Bool = false
+    var showPreflight: Bool = false
+    var preflight: [PreflightCheck: PreflightStatus] = Dictionary(
+        uniqueKeysWithValues: PreflightCheck.allCases.map { ($0, .idle) }
+    )
+    var preflightRunning = false
     var currentQuestionID: UUID?           // última pergunta/deixa do interlocutor
 
     // Histórico de sessões.
@@ -60,6 +67,11 @@ final class AppModel {
     /// A RootView pluga `.translationTask(translationConfig)`.
     var translationConfig: TranslationSession.Configuration?
     @ObservationIgnored nonisolated let translationPipe = TranslationPipe()
+    @ObservationIgnored private let updater = SPUStandardUpdaterController(
+        startingUpdater: true,
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    )
 
     private var coordinator: SessionCoordinator?
 
@@ -174,6 +186,8 @@ final class AppModel {
         coachBackendReady = false
         coachBackendError = nil
         summaryBackendError = nil
+        diagnostics = .init()
+        recordDiagnostic(kind: .session, name: "started")
         sessionStartedAt = Date()
         currentSessionID = UUID()
         let coord = SessionCoordinator(app: self)
@@ -234,7 +248,8 @@ final class AppModel {
             coachCards: coachCards.filter(\.hasContent).map { var c = $0; c.isStreaming = false; return c },
             summaryBullets: summaryBullets,
             hasAudio: stopResult.audioDuration != nil,
-            audioDuration: stopResult.audioDuration ?? 0
+            audioDuration: stopResult.audioDuration ?? 0,
+            diagnostics: diagnostics
         )
         SessionStore.save(record)
         history.insert(record, at: 0)
@@ -263,6 +278,75 @@ final class AppModel {
         deepSeekAvailable = DeepSeekCredential.isConfigured
     }
 
+    func checkForUpdates() {
+        updater.checkForUpdates(nil)
+    }
+
+    func runPreflight() {
+        guard !preflightRunning, !isSessionBusy else { return }
+        preflightRunning = true
+        for check in PreflightCheck.allCases { preflight[check] = .checking }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            async let audio: Void = self.runAudioPreflight()
+            async let coach: Void = self.runCoachPreflight()
+            _ = await (audio, coach)
+            self.preflightRunning = false
+        }
+    }
+
+    private func runAudioPreflight() async {
+        guard await AudioCapture.requestMicPermission() else {
+            preflight[.microphone] = .failed
+            preflight[.systemAudio] = .failed
+            return
+        }
+        let capture = AudioCapture()
+        do {
+            try await capture.start(includeSystem: true)
+        } catch {
+            preflight[.microphone] = .failed
+            preflight[.systemAudio] = .failed
+            return
+        }
+        let observer = Task { @MainActor [weak self] in
+            for await event in capture.events {
+                guard let self else { return }
+                switch event {
+                case .state(.self, .active): self.preflight[.microphone] = .passed
+                case .state(.self, .silent), .state(.self, .unavailable): self.preflight[.microphone] = .failed
+                case .state(.other, .active): self.preflight[.systemAudio] = .passed
+                case .state(.other, .unavailable): self.preflight[.systemAudio] = .failed
+                default: break
+                }
+            }
+        }
+        try? await Task.sleep(for: .seconds(10))
+        capture.finish()
+        observer.cancel()
+        if preflight[.microphone] == .checking { preflight[.microphone] = .failed }
+        if preflight[.systemAudio] == .checking { preflight[.systemAudio] = .failed }
+    }
+
+    private func runCoachPreflight() async {
+        let client = ClaudeClient()
+        let session = client.makeCoachSession(
+            model: SessionCoordinator.CoachModelPlan.resolve(for: coachModel).live,
+            system: Prompts.coachSystem(brief: brief)
+        )
+        guard let session else {
+            preflight[.coach] = .failed
+            return
+        }
+        do {
+            try await session.prewarm()
+            preflight[.coach] = .passed
+        } catch {
+            preflight[.coach] = .failed
+        }
+        await session.shutdown()
+    }
+
     func repairMicrophone() {
         Task { [coordinator] in await coordinator?.repairMicrophone() }
     }
@@ -289,12 +373,30 @@ final class AppModel {
         case .level(.other, let level): systemLevel = level
         case .state(.self, let state):
             micCaptureState = state
+            recordDiagnostic(kind: .capture, name: "mic_\(state.diagnosticName)", speaker: .self)
             if state != .active { micLevel = 0 }
         case .state(.other, let state):
             systemCaptureState = state
+            recordDiagnostic(kind: .capture, name: "system_\(state.diagnosticName)", speaker: .other)
             systemCaptureActive = state == .active
             if state != .active { systemLevel = 0 }
         }
+    }
+
+    func recordDiagnostic(
+        kind: DiagnosticEvent.Kind,
+        name: String,
+        speaker: Speaker? = nil,
+        durationMs: Int64? = nil,
+        detail: String? = nil
+    ) {
+        diagnostics.record(.init(
+            kind: kind,
+            name: name,
+            speaker: speaker,
+            durationMs: durationMs,
+            detail: detail
+        ))
     }
 
     // MARK: - Aplicação de eventos (chamado pelo coordinator, já no MainActor)
@@ -370,5 +472,17 @@ final class AppModel {
         guard let activeCoachCardID else { return }
         dismissedCoachCardIDs.insert(activeCoachCardID)
         self.activeCoachCardID = nil
+    }
+}
+
+private extension CaptureChannelState {
+    var diagnosticName: String {
+        switch self {
+        case .waiting: return "waiting"
+        case .active: return "active"
+        case .silent: return "silent"
+        case .recovering: return "recovering"
+        case .unavailable: return "unavailable"
+        }
     }
 }

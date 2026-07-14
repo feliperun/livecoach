@@ -28,6 +28,14 @@ struct CueMeApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
 
+        Window("CueMe Rail", id: "camera-rail") {
+            CameraRailView().environment(app)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+        .windowLevel(.floating)
+        .defaultPosition(.top)
+
         MenuBarExtra("CueMe", systemImage: app.isRunning ? "waveform.badge.mic" : "waveform") {
             MenuBarContent().environment(app)
         }
@@ -78,6 +86,9 @@ private struct MenuBarContent: View {
         }
 
         Divider()
+        Button("Buscar atualizações…") { app.checkForUpdates() }
+        Button("Abrir Camera Rail") { openWindow(id: "camera-rail") }
+        Button("Testar setup") { app.showPreflight = true }
         Button("Histórico de sessões") { app.showHistory = true }
         Button("Sobre o CueMe") { openWindow(id: "about") }
         Button("Sair") { NSApp.terminate(nil) }

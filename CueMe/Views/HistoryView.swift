@@ -120,6 +120,19 @@ private struct SessionDetailView: View {
                         }
                     }
                 }
+                if !record.diagnostics.events.isEmpty {
+                    section("Saúde") {
+                        HStack(spacing: 8) {
+                            DiagnosticChip(label: "STT", value: "\(record.diagnostics.count("stt_final"))")
+                            DiagnosticChip(label: "DICAS", value: "\(record.diagnostics.count("completed"))")
+                            DiagnosticChip(
+                                label: "1ª FRASE",
+                                value: record.diagnostics.averageMs("first_phrase").map { "\($0)ms" } ?? "—"
+                            )
+                            DiagnosticChip(label: "ERROS", value: "\(record.diagnostics.events.filter { $0.kind == .error }.count)")
+                        }
+                    }
+                }
                 section("Transcrição") {
                     ForEach(record.transcript) { line in
                         SavedLine(
@@ -205,6 +218,19 @@ private struct SessionDetailView: View {
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct DiagnosticChip: View {
+    let label: String
+    let value: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.system(size: 8, weight: .heavy)).foregroundStyle(.secondary)
+            Text(value).font(.system(size: 12, weight: .bold, design: .monospaced))
+        }
+        .padding(.horizontal, 9).padding(.vertical, 6)
+        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

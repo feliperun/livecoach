@@ -1,7 +1,7 @@
 # Packaging & distributing CueMe
 
-Short version: GitHub CI can build and test CueMe on `macos-26`, while release
-packaging and signing still happen on your Mac.
+Short version: GitHub CI builds and tests CueMe on `macos-26`. The release-assets
+workflow publishes the DMG, checksum, and signed Sparkle appcast for each tag.
 
 ## Can GitHub CI build it? Yes.
 
@@ -10,13 +10,13 @@ CueMe uses **macOS 26** frameworks (`SpeechAnalyzer`, `Translation`,
 compile the app and run XCTest with an ad-hoc-signed test host, alongside the
 Sentrux gates.
 
-The release workflow does not yet package, Developer ID-sign, notarize, or
-attach the `.dmg`; those distribution steps remain local/manual.
+Developer ID signing/notarization activates when its repository secrets are
+configured; otherwise it produces an ad-hoc signed early-access build.
 
 ## Build a `.dmg` locally
 
 ```sh
-./scripts/package.sh
+./scripts/package.sh 0.7.0
 # → dist/CueMe-<version>.dmg
 ```
 
@@ -47,10 +47,10 @@ step — normal for early open-source macOS apps.
 
 ## Releases
 
-`release-please` already opens a release PR and, when merged, cuts a **tag +
-GitHub Release** with the changelog. Attach the `.dmg` from `./scripts/package.sh`
-to that Release (drag-and-drop in the GitHub UI, or `gh release upload <tag>
-dist/CueMe-<v>.dmg`).
+`release-please` opens a release PR and synchronizes `MARKETING_VERSION`. After
+the tag exists, `release-assets` packages it and uploads the DMG, checksum, and
+appcast. Sparkle reads `releases/latest/download/appcast.xml` and verifies the
+update's EdDSA signature.
 
 ## First-version checklist
 
@@ -60,4 +60,4 @@ dist/CueMe-<v>.dmg`).
 - [x] Hardened runtime + mic / network entitlements
 - [x] Stable signing (`DEVELOPMENT_TEAM`)
 - [ ] Developer ID + notarization (needs the paid program) — optional for OSS
-- [ ] Attach the `.dmg` to the GitHub Release
+- [x] Attach the `.dmg`, checksum, and signed appcast to the GitHub Release

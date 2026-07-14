@@ -29,9 +29,15 @@ final class SessionCoordinator {
     private var liveCoachDebounceTask: Task<Void, Never>?
     private var liveCoachTask: Task<Void, Never>?
     private var manualCoachTask: Task<Void, Never>?
+    private var summaryDebounceTask: Task<Void, Never>?
+    private var summaryTask: Task<Void, Never>?
     private var pendingLiveCoach: CoachRequest?
     private var pendingManualCoach: CoachRequest?
     private var didAttemptMicRepair = false
+    private var speculativeDetectors: [Speaker: SpeculativeTurnDetector] = [:]
+    private var speculativeDebounceTasks: [Speaker: Task<Void, Never>] = [:]
+    private var speculativeText = ""
+    private var summaryPolicy = SummarySchedulePolicy()
 
     // Dedup de eco (setup alto-falante): a fala do interlocutor sai da caixa e volta
     // pelo mic. Guardamos finais recentes de cada lado e derrubamos duplicatas.
@@ -132,9 +138,6 @@ final class SessionCoordinator {
         // Coaching reage ao barramento (fim de turno do interlocutor).
         tasks.append(consumeBusForCoaching())
 
-        // Resumo rolante (debounce/coalesce por timer).
-        tasks.append(summaryLoop())
-
         // Captura de áudio → roteia para o transcritor da origem.
         let capture = AudioCapture()
         self.capture = capture
@@ -176,6 +179,13 @@ final class SessionCoordinator {
 
     /// Para a sessão e devolve duração + relógio real da gravação como uma unidade.
     func stop() async -> SessionStopResult {
+        summaryDebounceTask?.cancel()
+        summaryDebounceTask = nil
+        summaryTask?.cancel()
+        summaryTask = nil
+        if summaryPolicy.hasUnsummarizedTurns {
+            await runSummary(final: true)
+        }
         pendingLiveCoach = nil
         pendingManualCoach = nil
         liveCoachDebounceTask?.cancel()
@@ -213,6 +223,12 @@ final class SessionCoordinator {
         partialText.removeAll()
         recentSystemFinals.removeAll()
         recentMicFinals.removeAll()
+        speculativeDetectors.removeAll()
+        for task in speculativeDebounceTasks.values { task.cancel() }
+        speculativeDebounceTasks.removeAll()
+        speculativeText = ""
+        summaryPolicy = .init()
+        app.recordDiagnostic(kind: .session, name: "stopped")
         log.info("Sessão parada")
         return SessionStopResult(audioDuration: duration, recordingStartedAt: audioStart)
     }
@@ -369,6 +385,7 @@ final class SessionCoordinator {
                 app.dropUnfinalized(speaker: .self)
             }
             app.upsertLine(event)
+            triggerSpeculativeCoachIfNeeded(event)
 
         case .self:
             let recentSystem = recentSystemFinals.suffix(3).map { $0.text }.joined(separator: " ")
@@ -380,12 +397,55 @@ final class SessionCoordinator {
             }
             app.dismissActiveCoach()
             app.upsertLine(event)
+            triggerSpeculativeCoachIfNeeded(event)
+        }
+    }
+
+    private func triggerSpeculativeCoachIfNeeded(_ event: TranscriptEvent) {
+        guard !app.silenceMode, !app.brief.mode.isPassive else { return }
+        var detector = speculativeDetectors[event.speaker] ?? .init()
+        let shouldTrigger = detector.observe(event.text, looksActionable: Self.looksLikeQuestion)
+        speculativeDetectors[event.speaker] = detector
+        if shouldTrigger {
+            issueSpeculativeCoach(text: event.text, speaker: event.speaker)
+            return
+        }
+        guard Self.looksLikeQuestion(event.text),
+              event.text.split(separator: " ").count >= 4 else { return }
+        let text = event.text
+        let speaker = event.speaker
+        speculativeDebounceTasks[speaker]?.cancel()
+        speculativeDebounceTasks[speaker] = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .milliseconds(240)) }
+            catch { return }
+            guard let self,
+                  self.partialText[speaker] == text,
+                  self.speculativeText != SpeculativeTurnDetector.normalize(text) else { return }
+            self.issueSpeculativeCoach(text: text, speaker: speaker)
+        }
+    }
+
+    private func issueSpeculativeCoach(text: String, speaker: Speaker) {
+        speculativeText = SpeculativeTurnDetector.normalize(text)
+        app.recordDiagnostic(kind: .coach, name: "speculative_trigger", speaker: speaker)
+        Task { [weak self] in
+            guard let self else { return }
+            let window = await self.bus.window()
+            self.triggerCoach(
+                window: window,
+                latest: text,
+                manual: false,
+                speakerCertain: speaker == .other
+            )
         }
     }
 
     private func handleFinal(_ event: TranscriptEvent) async {
         purgeEchoBuffers()
         partialText.removeValue(forKey: event.speaker)
+        speculativeDebounceTasks[event.speaker]?.cancel()
+        speculativeDebounceTasks[event.speaker] = nil
+        speculativeDetectors[event.speaker]?.finalize()
 
         switch event.speaker {
         case .other:
@@ -434,10 +494,16 @@ final class SessionCoordinator {
                 passiveMode: app.brief.mode.isPassive
             ) {
                 app.currentQuestionID = lineID
-                let window = await bus.window()
-                triggerCoach(window: window, latest: event.text, manual: false, speakerCertain: false)
+                if consumeMatchingSpeculative(event.text) {
+                    log.info("Final incerto consolidou dica especulativa")
+                } else {
+                    let window = await bus.window()
+                    triggerCoach(window: window, latest: event.text, manual: false, speakerCertain: false)
+                }
             }
         }
+        app.recordDiagnostic(kind: .transcription, name: "stt_final", speaker: event.speaker)
+        scheduleSummaryAfterFinal()
     }
 
     private func purgeEchoBuffers() {
@@ -494,11 +560,20 @@ final class SessionCoordinator {
                 guard !self.app.silenceMode, !self.app.brief.mode.isPassive else { continue }
                 // Gatilho: interlocutor terminou um turno.
                 if event.speaker == .other, event.isFinal, event.isEndOfTurn {
+                    if self.consumeMatchingSpeculative(event.text) { continue }
                     let window = await self.bus.window()
                     self.triggerCoach(window: window, latest: event.text, manual: false)
                 }
             }
         }
+    }
+
+    private func consumeMatchingSpeculative(_ text: String) -> Bool {
+        let normalized = SpeculativeTurnDetector.normalize(text)
+        guard !speculativeText.isEmpty,
+              normalized.hasPrefix(speculativeText) || speculativeText.hasPrefix(normalized) else { return false }
+        speculativeText = ""
+        return true
     }
 
     /// Live e manual têm filas independentes. Novos fragments live substituem apenas
@@ -594,6 +669,20 @@ final class SessionCoordinator {
         log.info(
             "Coach iniciou (manual: \(request.manual, privacy: .public), fila: \(queueMs, privacy: .public) ms)"
         )
+        app.recordDiagnostic(kind: .coach, name: "requested", durationMs: queueMs)
+        let fallbackTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .milliseconds(1_800)) }
+            catch { return }
+            guard let self,
+                  let index = self.app.coachCards.firstIndex(where: { $0.id == request.cardID }),
+                  self.app.coachCards[index].isStreaming,
+                  self.app.coachCards[index].sayConversation == nil,
+                  self.app.coachCards[index].sayNative.isEmpty else { return }
+            var card = self.app.coachCards[index]
+            card.guidePT = LatencyFallback.guide(for: request.latest, mode: self.app.brief.mode)
+            self.app.upsertCoach(card)
+            self.app.recordDiagnostic(kind: .coach, name: "local_fallback", durationMs: 1_800)
+        }
         let stream = coachingLane.coach(
             window: request.window,
             latest: request.latest,
@@ -617,47 +706,86 @@ final class SessionCoordinator {
                     log.info(
                         "Coach primeira frase (manual: \(request.manual, privacy: .public), \(firstPhraseMs, privacy: .public) ms)"
                     )
+                    app.recordDiagnostic(kind: .coach, name: "first_phrase", durationMs: firstPhraseMs)
                 }
                 app.upsertCoach(card)
             }
             guard !Task.isCancelled else { return }
+            fallbackTask.cancel()
             app.pruneEmptyCoachCards()
             app.coachBackendReady = true
             let totalMs = Self.milliseconds(since: request.triggeredAt)
             log.info(
                 "Coach concluído (manual: \(request.manual, privacy: .public), dica: \(emittedUsefulCard, privacy: .public), total: \(totalMs, privacy: .public) ms)"
             )
+            app.recordDiagnostic(
+                kind: .coach,
+                name: emittedUsefulCard ? "completed" : "nothing_actionable",
+                durationMs: totalMs
+            )
         } catch {
+            fallbackTask.cancel()
             guard !Task.isCancelled else { return }
             app.pruneEmptyCoachCards()
             app.coachBackendError = error.localizedDescription
+            app.recordDiagnostic(kind: .error, name: "coach_failed", detail: "provider_error")
             log.error("Coaching falhou: \(error.localizedDescription, privacy: .public)")
         }
     }
 
     // MARK: - Resumo
 
-    private func summaryLoop() -> Task<Void, Never> {
-        Task { [weak self] in
-            var firstRun = true
-            while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(firstRun ? 12 : 25)) }
-                catch { break }
-                guard let self, !Task.isCancelled else { break }
-                firstRun = false
-                let window = await self.bus.window()
-                do {
-                    if let bullets = try await self.summaryLane.summarize(window: window) {
-                        self.app.summaryBullets = bullets
-                        self.app.summaryBackendError = nil
-                        self.log.info("Resumo atualizado (\(bullets.count, privacy: .public) itens)")
-                    }
-                } catch {
-                    guard !Task.isCancelled else { break }
-                    self.app.summaryBackendError = error.localizedDescription
-                    self.log.error("Resumo falhou: \(error.localizedDescription, privacy: .public)")
-                }
+    private func scheduleSummaryAfterFinal() {
+        let thresholdReached = summaryPolicy.registerFinalTurn()
+        if thresholdReached { summaryDebounceTask?.cancel() }
+        guard summaryDebounceTask == nil || thresholdReached else { return }
+        summaryDebounceTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .seconds(thresholdReached ? 2 : 8)) }
+            catch { return }
+            guard let self, !Task.isCancelled else { return }
+            self.summaryDebounceTask = nil
+            guard self.summaryTask == nil else { return }
+            self.summaryTask = Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.runSummary(final: false)
+                self.summaryTask = nil
             }
+        }
+    }
+
+    private func runSummary(final: Bool) async {
+        let started: ContinuousClock.Instant = .now
+        let window = await bus.window()
+        guard !window.isEmpty else { return }
+        let summaryJob = Task { [summaryLane] in
+            try await summaryLane.summarize(window: window)
+        }
+        let timeout = Task {
+            do { try await Task.sleep(for: .seconds(final ? 8 : 15)) }
+            catch { return }
+            summaryJob.cancel()
+        }
+        defer { timeout.cancel() }
+        do {
+            if let bullets = try await summaryJob.value {
+                app.summaryBullets = bullets
+                app.summaryBackendError = nil
+                summaryPolicy.markSummarized()
+                let elapsed = Self.milliseconds(since: started)
+                app.recordDiagnostic(
+                    kind: .summary,
+                    name: final ? "final_completed" : "updated",
+                    durationMs: elapsed
+                )
+                log.info("Resumo atualizado (\(bullets.count, privacy: .public) itens)")
+            }
+        } catch {
+            guard !Task.isCancelled else { return }
+            app.summaryBackendError = summaryJob.isCancelled
+                ? "Resumo demorou demais; mantivemos a última versão."
+                : error.localizedDescription
+            app.recordDiagnostic(kind: .error, name: final ? "final_summary_failed" : "summary_failed")
+            log.error("Resumo falhou: \(error.localizedDescription, privacy: .public)")
         }
     }
 

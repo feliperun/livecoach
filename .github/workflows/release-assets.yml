@@ -1,0 +1,90 @@
+name: release-assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to package (for example v0.7.0)
+        required: true
+        type: string
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: macos-26
+    timeout-minutes: 25
+    env:
+      TAG: ${{ inputs.tag || github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Resolve version
+        run: echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
+
+      - name: Import Developer ID certificate
+        if: ${{ secrets.DEVELOPER_ID_P12_BASE64 != '' }}
+        env:
+          P12: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          echo "$P12" | base64 --decode > certificate.p12
+          security import certificate.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+
+      - name: Build DMG
+        env:
+          CUEME_ADHOC_SIGN: ${{ secrets.DEVELOPER_ID_P12_BASE64 == '' && '1' || '0' }}
+          CUEME_SIGNING_IDENTITY: ${{ secrets.DEVELOPER_ID_P12_BASE64 != '' && 'Developer ID Application' || '' }}
+          CUEME_DEVELOPMENT_TEAM: ${{ secrets.NOTARY_TEAM_ID }}
+        run: ./scripts/package.sh "$VERSION"
+
+      - name: Notarize and staple
+        if: ${{ secrets.DEVELOPER_ID_P12_BASE64 != '' }}
+        env:
+          APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          APP_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: |
+          xcrun notarytool submit "dist/CueMe-$VERSION.dmg" \
+            --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APP_PASSWORD" --wait
+          xcrun stapler staple "dist/CueMe-$VERSION.dmg"
+          shasum -a 256 "dist/CueMe-$VERSION.dmg" > "dist/CueMe-$VERSION.dmg.sha256"
+
+      - name: Install Sparkle tools
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download 2.9.4 -R sparkle-project/Sparkle \
+            -p 'Sparkle-2.9.4.tar.xz' -D "$RUNNER_TEMP/sparkle"
+          tar -xf "$RUNNER_TEMP/sparkle/Sparkle-2.9.4.tar.xz" -C "$RUNNER_TEMP/sparkle"
+
+      - name: Generate signed appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          test -n "$SPARKLE_PRIVATE_KEY"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle-private-key"
+          "$RUNNER_TEMP/sparkle/bin/generate_appcast" \
+            --ed-key-file "$RUNNER_TEMP/sparkle-private-key" \
+            --download-url-prefix "https://github.com/${{ github.repository }}/releases/download/$TAG/" \
+            dist
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release upload "$TAG"
+          "dist/CueMe-$VERSION.dmg"
+          "dist/CueMe-$VERSION.dmg.sha256"
+          "dist/appcast.xml"
+          --clobber

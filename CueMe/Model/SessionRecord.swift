@@ -19,6 +19,7 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
     var summaryBullets: [String]
     var hasAudio: Bool
     var audioDuration: TimeInterval
+    var diagnostics: SessionDiagnostics
 
     init(
         id: UUID = UUID(),
@@ -34,7 +35,8 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         coachCards: [CoachCard],
         summaryBullets: [String],
         hasAudio: Bool = false,
-        audioDuration: TimeInterval = 0
+        audioDuration: TimeInterval = 0,
+        diagnostics: SessionDiagnostics = .init()
     ) {
         self.id = id
         self.startedAt = startedAt
@@ -50,6 +52,7 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         self.summaryBullets = summaryBullets
         self.hasAudio = hasAudio
         self.audioDuration = audioDuration
+        self.diagnostics = diagnostics
     }
 
     /// Decode tolerante: sessões salvas antes do gravador não têm hasAudio/audioDuration.
@@ -69,6 +72,7 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         summaryBullets = try c.decode([String].self, forKey: .summaryBullets)
         hasAudio = try c.decodeIfPresent(Bool.self, forKey: .hasAudio) ?? false
         audioDuration = try c.decodeIfPresent(TimeInterval.self, forKey: .audioDuration) ?? 0
+        diagnostics = try c.decodeIfPresent(SessionDiagnostics.self, forKey: .diagnostics) ?? .init()
     }
 
     var duration: TimeInterval { max(0, endedAt.timeIntervalSince(startedAt)) }

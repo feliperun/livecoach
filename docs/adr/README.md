@@ -64,3 +64,4 @@ proposed → active → superseded
 | [0015](0015-glance-first-live-ui.md) | Glance-first live coaching UI | active |
 | [0016](0016-observable-non-cancelling-coach-lanes.md) | Observable, non-cancelling coach lanes | active |
 | [0017](0017-fast-coach-two-speed.md) | Two-speed Fast Coach with an instant local cue | active |
+| [0018](0018-glanceable-runtime-and-signed-updates.md) | Glanceable runtime and signed updates | active |

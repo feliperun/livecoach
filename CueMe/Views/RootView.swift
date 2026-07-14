@@ -45,6 +45,9 @@ struct RootView: View {
         .sheet(isPresented: $app.showHistory) {
             HistoryView()
         }
+        .sheet(isPresented: $app.showPreflight) {
+            PreflightView()
+        }
     }
 }
 
