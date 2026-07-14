@@ -26,11 +26,14 @@ final class AppModel {
     var profiles: [BriefProfile] = []
     var activeProfileID: UUID?
 
-    var sttSource: SttSource = .native
+    var sttSource: SttSource = .native {
+        didSet { UserDefaults.standard.set(sttSource.rawValue, forKey: Self.sttSourceKey) }
+    }
     var coachModel: CoachModel = .sonnet {        // default keyless; DeepSeek é opt-in
         didSet { UserDefaults.standard.set(coachModel.rawValue, forKey: Self.coachModelKey) }
     }
     private static let coachModelKey = "coachModel"
+    private static let sttSourceKey = "sttSource"
     var echoCancellation: Bool = false     // AEC experimental (sem fones); default off
     var trainingMode: Bool = false         // entrevistador por voz (teste e2e + prep solo)
     var recordAudio: Bool = true           // grava o áudio original sincronizado (default ligado)
@@ -38,6 +41,7 @@ final class AppModel {
     var silenceMode: Bool = false          // pausa o coach, mantém transcript
     private(set) var claudeAvailable = false
     private(set) var deepSeekAvailable = false
+    private(set) var deepgramAvailable = false
     var coachBackendReady = false
     var coachBackendError: String?
     var summaryBackendError: String?
@@ -96,8 +100,16 @@ final class AppModel {
         // An ad-hoc XCTest host has a different Keychain identity and macOS may
         // block waiting for an access dialog before the test bundle is loaded.
         let hasDeepSeek = isTesting ? false : DeepSeekCredential.isConfigured
+        let hasDeepgram = isTesting ? false : DeepgramCredential.isConfigured
         self.claudeAvailable = hasClaude
         self.deepSeekAvailable = hasDeepSeek
+        self.deepgramAvailable = hasDeepgram
+
+        if !isTesting,
+           let raw = UserDefaults.standard.string(forKey: Self.sttSourceKey),
+           let saved = SttSource(rawValue: raw) {
+            self.sttSource = saved
+        }
 
         var selected: CoachModel = .sonnet
         if let raw = UserDefaults.standard.string(forKey: Self.coachModelKey),
@@ -179,6 +191,11 @@ final class AppModel {
 
     func start() {
         guard !isSessionBusy else { return }
+        guard sttSource != .deepgram || deepgramAvailable else {
+            sessionState = .error("Configure a chave da Deepgram.")
+            showSettings = true
+            return
+        }
         guard brief.mode.isPassive || backendAvailable else {
             sessionState = .error(coachModel.isDeepSeek
                 ? "Configure a chave da DeepSeek."
@@ -320,6 +337,7 @@ final class AppModel {
     func refreshBackendStatus() {
         claudeAvailable = ClaudeClient().isAvailable
         deepSeekAvailable = DeepSeekCredential.isConfigured
+        deepgramAvailable = DeepgramCredential.isConfigured
     }
 
     func applyProfile(_ id: UUID) {

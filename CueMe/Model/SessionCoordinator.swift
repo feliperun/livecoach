@@ -110,12 +110,22 @@ final class SessionCoordinator {
         buildBrain(brief: brief)
 
         // STT por origem: um transcritor para o mic (self), outro para o sistema (other).
-        let mic = NativeTranscriber(config: SttConfig(
+        let provider: any SttProvider
+        do {
+            provider = try SttProviderFactory.make(
+                source: app.sttSource,
+                deepgramAPIKey: DeepgramCredential.apiKey
+            )
+        } catch {
+            await failStart(error.localizedDescription)
+            return
+        }
+        let mic = provider.makeSession(config: SttConfig(
             speaker: .self,
             localeIdentifier: brief.conversationLang,
             keyterms: brief.keyterms
         ))
-        let system = NativeTranscriber(config: SttConfig(
+        let system = provider.makeSession(config: SttConfig(
             speaker: .other,
             localeIdentifier: brief.conversationLang,
             keyterms: brief.keyterms
@@ -449,7 +459,18 @@ final class SessionCoordinator {
             localeIdentifier: app.brief.conversationLang,
             keyterms: app.brief.keyterms
         )
-        let replacement = NativeTranscriber(config: config)
+        let provider: any SttProvider
+        do {
+            provider = try SttProviderFactory.make(
+                source: app.sttSource,
+                deepgramAPIKey: DeepgramCredential.apiKey
+            )
+        } catch {
+            app.recordDiagnostic(kind: .error, name: "stt_recovery_failed", speaker: speaker)
+            app.setRuntimeHealth(.critical, reason: "Transcrição indisponível", sticky: true)
+            return
+        }
+        let replacement = provider.makeSession(config: config)
         do {
             try await replacement.start()
             switch speaker {

@@ -28,8 +28,9 @@ its translation, a couple of key words. Terse beats thorough when you're live.
 
 ## Principles
 
-- **Local-first.** On-device STT and translation; the default LLM runs through
-  the user's own Claude Code CLI. A keyed DeepSeek backend is explicit opt-in.
+- **Local-first.** On-device STT and translation remain the default; the default
+  LLM runs through the user's own Claude Code CLI. Keyed DeepSeek coaching and
+  Deepgram STT are explicit opt-ins.
 - **Latency is a feature.** Prewarm sessions, keep translation off the LLM,
   scan in two seconds. If it's not fast, it's useless mid-sentence.
 - **Truth from the brief only.** Coaching never fabricates the user's history —
@@ -73,7 +74,7 @@ soak with injected stalls.
 ## Non-goals (for now)
 
 - No iOS/Windows/web port — macOS 26 only.
-- No cloud STT/translation, no bundled API keys.
+- No mandatory cloud STT, no cloud translation and no bundled API keys.
 - No voice diarization engine — separation is by capture origin, not voiceprint.
 - No multi-user/team features — this is a single-user local tool.
 

@@ -69,14 +69,14 @@ enum CoachModel: String, Codable, CaseIterable, Sendable, Identifiable {
 
 enum SttSource: String, Codable, CaseIterable, Sendable, Identifiable {
     case native      // SpeechAnalyzer / SpeechTranscriber (on-device)
-    case assemblyAI  // reservado (Fase 2)
+    case deepgram    // Nova-3 streaming via WebSocket
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .native: return "Nativo (on-device)"
-        case .assemblyAI: return "AssemblyAI"
+        case .deepgram: return "Deepgram Nova-3"
         }
     }
 }

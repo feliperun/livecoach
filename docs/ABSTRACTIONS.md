@@ -14,8 +14,9 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
    `.other`). It also emits `AudioCaptureEvent` level/health signals and owns
    bounded recovery. This is the *only* place that knows about audio hardware.
 2. **Understand** (`STT/`, `Audio/MeetingRecorder`) — turns `AudioChunk` into
-   meaning or a persisted artifact: `NativeTranscriber` → `TranscriptEvent`
-   (on-device `SpeechAnalyzer`), `TranslationPipe` → translated text (on-device
+   meaning or a persisted artifact: the selected `SttProvider` creates either
+   `NativeTranscriber` (on-device `SpeechAnalyzer`) or `DeepgramTranscriber`
+   (Nova-3 streaming) → `TranscriptEvent`, `TranslationPipe` → translated text (on-device
    `Translation`), `MeetingRecorder` → two timestamp-synced AAC-LC `.m4a` files.
 3. **Bus** (`Bus/TranscriptBus`) — the single actor all `TranscriptEvent`s pass
    through. Fans out to subscribers (coach, summary, UI) and keeps the rolling
@@ -51,6 +52,7 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 | Microphone | `AVAudioEngine` in `AudioCapture` | Tagged `.self`. |
 | System/app audio | `ScreenCaptureKit` in `AudioCapture` | Tagged `.other`; needs Screen & System Audio Recording permission; `excludesCurrentProcessAudio` toggles for training mode self-capture. |
 | Speech-to-text | `SpeechAnalyzer`/`SpeechTranscriber` in `NativeTranscriber` | On-device, macOS 26 only. |
+| Cloud speech-to-text (opt-in) | Deepgram Nova-3 WebSocket in `DeepgramTranscriber` | Separate stream per capture origin; key in Keychain; sends live PCM + keyterms. |
 | Translation | `Translation` framework via `TranslationPipe` | On-device; `TranslationSession` is non-Sendable, confined via `nonisolated(unsafe)` at the `.translationTask` boundary — don't let it cross actors any other way. |
 | Text-to-speech | `AVSpeechSynthesizer` in `TrainingCoordinator` | Speaks the interviewer's questions in training mode. |
 | LLM brain (default) | Claude Code CLI (`claude -p`, stream-json) via `ClaudeSession` | No API key — reuses the user's own CLI login. See [ADR 0005](adr/0005-llm-brain-via-claude-cli.md). |
@@ -68,6 +70,9 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
   ([ADR 0007](adr/0007-speaker-by-origin-and-echo-dedup.md)).
   Partial and final text may still echo across physical channels; confirmed echo
   is removed from both the UI and the rolling `TranscriptBus` context.
+- **STT providers preserve one session per capture origin.** Native and Deepgram
+  must emit the same `TranscriptEvent` contract; switching providers cannot
+  introduce diarization or merge mic/system audio.
 - **The coach's only source of truth about the user is the brief + CV.** The
   system prompt explicitly forbids using ambient CLI context; never weaken this
   when editing `Prompts.coachSystem` ([ADR 0008](adr/0008-coach-ux-and-context-safety.md)).

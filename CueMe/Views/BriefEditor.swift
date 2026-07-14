@@ -11,6 +11,7 @@ struct BriefEditor: View {
     @State private var importError: String?
     @State private var deepseekKey = ""
     @State private var deepseekBaseURL = ""
+    @State private var deepgramKey = ""
     @State private var selectedProfileID: UUID?
     @State private var profileName = ""
 
@@ -149,6 +150,29 @@ struct BriefEditor: View {
                     }
                 }
 
+                if app.sttSource == .deepgram {
+                    Section {
+                        SecureField("API key", text: $deepgramKey)
+                            .textContentType(.password)
+                            .onChange(of: deepgramKey) { _, new in
+                                DeepgramCredential.setAPIKey(new)
+                                app.refreshBackendStatus()
+                            }
+                        Label(
+                            app.deepgramAvailable ? "Chave salva" : "Chave necessária",
+                            systemImage: app.deepgramAvailable ? "checkmark.circle.fill" : "key"
+                        )
+                        .font(.system(size: 11))
+                        .foregroundStyle(app.deepgramAvailable ? Theme.mint : Theme.amber)
+                    } header: {
+                        Text("Deepgram Nova-3")
+                    } footer: {
+                        Text("A chave fica no Keychain. O áudio PCM da conversa e os termos da pauta são enviados ao Deepgram durante a sessão.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 if app.brief.mode.isPassive {
                     Section {
                         Label("Neste modo o coach ao vivo fica desligado. Depois, você ainda pode resumir, extrair ações e perguntar sobre a reunião.", systemImage: "info.circle")
@@ -205,6 +229,7 @@ struct BriefEditor: View {
         .onAppear {
             selectedProfileID = app.activeProfileID
             deepseekKey = DeepSeekCredential.apiKey ?? ""
+            deepgramKey = DeepgramCredential.apiKey ?? ""
             let stored = DeepSeekCredential.baseURL
             deepseekBaseURL = stored == DeepSeekCredential.defaultBaseURL ? "" : stored
         }

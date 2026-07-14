@@ -38,6 +38,8 @@ subscription/login), so there's nothing to configure and no key to leak.
   the two sources are separate, *who spoke* is known by origin — no diarization.
   Acoustic-echo dedup keeps it working even on speakers (no headphones).
 - **Live transcription** with speaker labels, in a compact always-on-top window.
+- **Selectable STT** — Apple on-device by default or opt-in Deepgram Nova-3
+  streaming with domain keyterms and server-side turn detection.
 - **Line-by-line translation** via Apple's on-device **Translation** framework
   (~100–200ms, no key), with the key words bolded for fast scanning.
 - **Rolling summary** of what's been said so far.
@@ -195,8 +197,9 @@ and accessibility use.
 
 ## Privacy
 
-- Speech-to-text is **on-device** (`SpeechAnalyzer`) — audio doesn't leave your
-  Mac for transcription.
+- Speech-to-text is **on-device by default** (`SpeechAnalyzer`). If you select
+  Deepgram, the two live PCM streams and configured keyterms are sent to Nova-3;
+  the API key remains in the macOS Keychain.
 - Translation stays on-device. Coach and summary use the selected provider:
   Claude CLI by default, or DeepSeek when explicitly configured. DeepSeek keys
   live in the macOS Keychain.

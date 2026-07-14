@@ -7,9 +7,9 @@
 ## High-level flow
 
 ```
-AVAudioEngine (mic, .self) ─────┐
-                                ├─▶ AudioConverter (→16k mono PCM16) ─▶ NativeTranscriber (SpeechAnalyzer)
-ScreenCaptureKit (system, .other)┘        │                                    │
+AVAudioEngine (mic, .self) ─────┐                                        ┌─▶ NativeTranscriber (SpeechAnalyzer)
+                                ├─▶ SttProvider (→16k mono PCM16) ────────┤
+ScreenCaptureKit (system, .other)┘        │                               └─▶ DeepgramTranscriber (Nova-3 WebSocket)
                                            ▼                                   ▼
                                     MeetingRecorder                     TranscriptBus (actor)
                                   (synced dual .m4a files,     ┌────────────┬────────────┬────────────┐
@@ -46,7 +46,10 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
   `AVAudioPlayer`s synced via
   `deviceCurrentTime`), `WaveformGenerator` (background amplitude envelope for
   the player UI).
-- **STT/** — `NativeTranscriber` (`SpeechAnalyzer`/`SpeechTranscriber`, on-device),
+- **STT/** — provider abstraction with `NativeTranscriber`
+  (`SpeechAnalyzer`/`SpeechTranscriber`, default and on-device) or opt-in
+  `DeepgramTranscriber` (Nova-3 WebSocket, continuous mono PCM16 resampling,
+  endpointed partial/final assembly and Keychain credential), plus
   `TranslationPipe` (feeds Apple `Translation` from the `.translationTask`).
 - **Bus/** — `TranscriptBus` actor: fan-out `AsyncStream` + rolling window.
 - **Brain/** — `ClaudeClient` (locates the `claude` CLI), `ClaudeSession`
@@ -109,7 +112,9 @@ its complete directory and any legacy counterpart.
 
 Native macOS 26 app (Apple Silicon). No app-owned backend. The default LLM runs
 through the user's local **Claude Code CLI** (`claude -p`); an opt-in DeepSeek
-coach calls its configured API directly. STT and translation are on-device.
+coach calls its configured API directly. STT is on-device by default; selecting
+Deepgram sends the two live PCM streams
+to Nova-3. Translation remains on-device in either configuration.
 
 ## Observability & quality
 
@@ -127,13 +132,17 @@ coach calls its configured API directly. STT and translation are on-device.
 
 ## Security model
 
-- Claude auth stays in the CLI. An optional DeepSeek key is stored in Keychain.
-- STT audio never leaves the device; translation is on-device.
+- Claude auth stays in the CLI. Optional DeepSeek and Deepgram keys are stored
+  as separate macOS Keychain items.
+- Native STT audio never leaves the device. When Deepgram is explicitly selected,
+  live 16 kHz PCM and configured keyterms are sent over authenticated TLS
+  WebSockets; translation stays on-device.
 - Coaching/summary text is sent to the selected provider: Anthropic through the
   user's isolated CLI session or DeepSeek through direct HTTPS. CLI sessions run
   from an empty cwd and the coach prompt walls off ambient context.
-- Recorded audio (`.m4a`, with legacy `.caf` playback) never leaves the device — it's written locally
-  and only read back by `MeetingPlayer` for in-app playback.
+- Recorded audio (`.m4a`, with legacy `.caf` playback) is never uploaded as an
+  archive — it is written locally and only read back by `MeetingPlayer` for
+  in-app playback.
 - Permissions: Microphone (required) and Screen & System Audio Recording
   (optional, for the other party). Non-sandboxed dev build; hardened runtime on;
   stable `DEVELOPMENT_TEAM` signing so TCC grants persist across builds.

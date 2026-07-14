@@ -52,7 +52,7 @@ proposed → active → superseded
 | [0003](0003-sentrux-structural-quality-gates.md) | Sentrux structural quality gates | active |
 | [0004](0004-native-macos-swift-app.md) | Native macOS 26 Swift app (no webview/driver) | active |
 | [0005](0005-llm-brain-via-claude-cli.md) | LLM brain via the Claude Code CLI, not the API | active |
-| [0006](0006-on-device-stt-and-translation.md) | On-device STT & translation; LLM for coaching | active |
+| [0006](0006-on-device-stt-and-translation.md) | On-device STT & translation; LLM for coaching | superseded by 0022 |
 | [0007](0007-speaker-by-origin-and-echo-dedup.md) | Speaker by capture origin, with echo dedup | active |
 | [0008](0008-coach-ux-and-context-safety.md) | Coach UX: terse, CV-grounded, leak-guarded | active |
 | [0009](0009-training-mode-voice-interviewer.md) | Training mode: voice interviewer + e2e harness | active |
@@ -68,3 +68,4 @@ proposed → active → superseded
 | [0019](0019-reliability-watchdog-and-provider-failover.md) | Runtime watchdog, provider failover, and post-session quality | active |
 | [0020](0020-session-memory-workspace-and-portable-archive.md) | Session memory workspace and portable human-readable archive | active |
 | [0021](0021-portable-high-quality-meeting-audio.md) | Portable high-quality meeting audio | active |
+| [0022](0022-optional-deepgram-streaming-stt.md) | Optional Deepgram streaming STT | active |
