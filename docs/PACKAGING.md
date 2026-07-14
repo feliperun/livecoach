@@ -12,6 +12,9 @@ Sentrux gates.
 
 Developer ID signing/notarization activates when its repository secrets are
 configured; otherwise it produces an ad-hoc signed early-access build.
+Ad-hoc packages disable Hardened Runtime because the app and embedded Sparkle
+binaries do not share a Developer ID Team ID in that mode. Developer ID builds
+retain Hardened Runtime and follow the notarization path below.
 
 ## Build a `.dmg` locally
 
