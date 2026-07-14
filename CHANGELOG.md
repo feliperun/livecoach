@@ -5,7 +5,6 @@
 
 ### Features
 
-* reliable fast live coaching ([8c49872](https://github.com/feliperun/cueme/commit/8c49872e2ca7865e4b43c5163f205618b7594c1d))
 * ship reliable fast live coaching ([1014084](https://github.com/feliperun/cueme/commit/10140844262c07af01bf2182a82e4a6c392a7583))
 
 ## [0.5.0](https://github.com/feliperun/cueme/compare/v0.4.0...v0.5.0) (2026-07-13)
