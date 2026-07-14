@@ -61,7 +61,10 @@ if [ -n "${CUEME_NOTARY_PROFILE:-}" ]; then
   xcrun stapler staple "${DMG}"
 fi
 
-shasum -a 256 "${DMG}" > "${DMG}.sha256"
+(
+  cd "$(dirname "${DMG}")"
+  shasum -a 256 "$(basename "${DMG}")" > "$(basename "${DMG}").sha256"
+)
 
 echo "✓ $DMG"
 echo "✓ ${DMG}.sha256"
