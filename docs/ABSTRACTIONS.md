@@ -36,9 +36,10 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 6. **State** (`Model/AppModel`) — the single `@Observable` source of truth the
    UI reads. `SessionCoordinator` pushes into it; it never reaches back into the
    coordinator except through the command methods (`start()`, `stop()`, `ask()`).
-7. **Persistence** (`Model/SessionRecord` + `SessionStore`, `Audio/MeetingRecording`)
-   — snapshots a finished session to disk (JSON + audio files) and reads it back
-   for history browsing. Pure data + file I/O, no live-session dependencies.
+7. **Persistence** (`SessionRecord`, `SessionArchive`/`SessionStore`,
+   `Audio/MeetingRecording`) — snapshots a session into one portable directory:
+   typed JSON, mandatory human-readable Markdown and synchronized audio. Notes,
+   takeaways and generated artifacts rewrite both state representations.
 8. **Views** (`Views/`) — SwiftUI only. Reads `AppModel`/`SessionRecord`, calls
    `AppModel` command methods, never touches `SessionCoordinator` or the audio
    layer directly.
@@ -57,7 +58,7 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 | Word-class tagging | `NaturalLanguage`/`NLTagger` in `Highlighter` | On-device; tiers translated text for fast scanning. |
 | Audio playback | Two `AVAudioPlayer`s in `MeetingPlayer` | Synced via a shared `deviceCurrentTime` anchor, not a mixer graph. |
 | CV import | `PDFKit` in `BriefEditor` | Extracts text from a pasted/imported résumé. |
-| Persistence | `FileManager` + `JSONEncoder`/`Decoder` in `SessionStore`/`BriefStore` | Application Support, non-sandboxed. |
+| Persistence | `FileManager` + `JSONEncoder`/`Decoder` in `SessionStore`/`BriefStore` | User-selectable local archive; Application Support default and legacy fallback. |
 | Packaging | `xcodebuild` + `hdiutil` in `scripts/package.sh` | Local only — see [Getting Started](GETTING-STARTED.md) and [Packaging](PACKAGING.md). |
 
 ## Contracts & invariants
@@ -91,9 +92,13 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 - **A session is never silently healthy.** Mic and system channel states are
   independent; digital-zero mic data and an interrupted `SCStream` must be
   surfaced and repaired or remain visibly unavailable ([ADR 0014](adr/0014-per-channel-capture-health.md)).
-- **Recordings are located by session id, never by a stored path.**
-  `MeetingRecording.directory(for:)` derives the path from the UUID; exported
-  session JSON stays portable across machines/reinstalls.
+- **Recordings are located by a portable session directory name, never by an
+  absolute stored path.** `SessionRecord.archiveFolderName` combines timestamp
+  and short UUID; `MeetingRecording` resolves it against the current archive root
+  and falls back to the legacy UUID directory.
+- **Markdown mirrors durable session state.** Any saved mutation to notes,
+  takeaways, summary or generated artifacts goes through `SessionStore.save`,
+  which rewrites `session.json` and `session.md` together.
 - **`ClaudeSession` always spawns from an isolated empty cwd with hooks
   disabled.** This is the containment boundary against the CLI leaking the
   *user's own* project context into the coach's output.

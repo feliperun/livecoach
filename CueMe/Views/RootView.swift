@@ -1,8 +1,7 @@
 import SwiftUI
 import Translation
 
-/// Layout compacto-first: feito pra viver numa janela pequena ao lado do Zoom/Meet.
-/// Hierarquia: pergunta atual no topo → dica do coach (herói) → painéis colapsáveis.
+/// Unified live and review workspace with an always-visible session rail.
 struct RootView: View {
     @Environment(AppModel.self) private var app
 
@@ -12,25 +11,18 @@ struct RootView: View {
         // nunca o AppModel (MainActor) — assim a session não "vaza" de isolamento.
         let pipe = app.translationPipe
 
-        VStack(spacing: 0) {
-            HeaderBar()
-            CaptureHealthAlert()
+        HStack(spacing: 0) {
+            SessionSidebar()
+            Divider().opacity(0.45)
 
-            if app.brief.mode.isPassive {
-                MeetingPanel()
-                    .frame(maxHeight: .infinity)
-            } else {
-                QuestionBanner()
-                    .padding(.horizontal, 12)
-                    .padding(.top, 10)
-
-                CoachingPane()
-                    .frame(maxHeight: .infinity)
-            }
-
-            CollapsiblePanels()
-            if !app.brief.mode.isPassive {
-                InputBar()
+            VStack(spacing: 0) {
+                HeaderBar()
+                if let record = app.selectedSession {
+                    SessionWorkspaceView(record: record)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    LiveWorkspace()
+                }
             }
         }
         .background(Theme.background.ignoresSafeArea())
@@ -42,12 +34,35 @@ struct RootView: View {
         .sheet(isPresented: $app.showSettings) {
             BriefEditor()
         }
-        .sheet(isPresented: $app.showHistory) {
-            HistoryView()
-        }
         .sheet(isPresented: $app.showPreflight) {
             PreflightView()
         }
+    }
+}
+
+private struct LiveWorkspace: View {
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        VStack(spacing: 0) {
+            CaptureHealthAlert()
+
+            if app.brief.mode.isPassive {
+                MeetingPanel()
+                    .frame(maxHeight: .infinity)
+            } else {
+                QuestionBanner()
+                    .padding(.horizontal, 12)
+                    .padding(.top, 10)
+                CoachingPane()
+                    .frame(maxHeight: .infinity)
+            }
+
+            CollapsiblePanels()
+            if !app.brief.mode.isPassive { InputBar() }
+            LiveTransportBar()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

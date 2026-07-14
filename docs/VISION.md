@@ -4,13 +4,12 @@
 
 ## Why this, why now
 
-Live conversations in a second language — job interviews, sales calls, hard
-talks — overload you: parse what was just said, translate it in your head, and
-compose a strong answer, all in a few seconds. macOS 26 finally makes the pieces
-native and cheap: on-device speech (`SpeechAnalyzer`), on-device translation
-(`Translation`), and a keyless default brain through the Claude Code CLI. CueMe
-stitches them into a copilot that whispers "he asked X →
-answer like this" while you keep your attention on the person.
+Meetings disappear from memory as soon as the next task starts. During demanding
+conversations, attention is already exhausted by listening, thinking and looking
+at the other person; taking useful notes or composing a strong answer adds more
+load. CueMe records and organizes the meeting locally, then adds its differentiator:
+a coach that can whisper the next useful move live and reason over the saved event
+afterward.
 
 ## The problem
 
@@ -36,8 +35,10 @@ its translation, a couple of key words. Terse beats thorough when you're live.
 - **Truth from the brief only.** Coaching never fabricates the user's history —
   facts come from the session brief and the pasted CV, or it offers a structure
   to fill.
-- **Compact and unobtrusive.** A small, always-on-top window that sits beside
-  the call, not another thing to manage.
+- **Compact and unobtrusive.** A glanceable interface with icons and short actions,
+  not another wall of text competing with the person on screen.
+- **Human-readable memory.** Every meeting remains useful inside the app and as
+  a timestamped Markdown archive the user controls.
 
 ## Shipped (v0.4.0)
 

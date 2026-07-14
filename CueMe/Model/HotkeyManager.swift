@@ -42,4 +42,11 @@ final class HotkeyManager {
             window.makeKeyAndOrderFront(nil)
         }
     }
+
+    static func showMainWindow() {
+        let windows = NSApp.windows.filter { $0.canBecomeMain && !$0.isMiniaturized }
+        guard let window = windows.first ?? NSApp.windows.first else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
 }

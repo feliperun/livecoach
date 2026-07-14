@@ -179,8 +179,8 @@ private struct SessionDetailView: View {
         }
         .task {
             guard record.hasAudio else { return }
-            let selfURL = MeetingRecording.selfURL(for: record.id)
-            let otherURL = MeetingRecording.otherURL(for: record.id)
+            let selfURL = MeetingRecording.selfURL(for: record)
+            let otherURL = MeetingRecording.otherURL(for: record)
             player.load(selfURL: selfURL, otherURL: otherURL)
             envelope = await Task.detached(priority: .userInitiated) {
                 WaveformGenerator.envelope(selfURL: selfURL, otherURL: otherURL, buckets: 260)

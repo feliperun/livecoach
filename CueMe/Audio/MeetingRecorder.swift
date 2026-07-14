@@ -126,12 +126,33 @@ enum MeetingRecording {
     static let otherFilename = "other.caf"
 
     static func directory(for sessionID: UUID) -> URL {
+        legacyDirectory(for: sessionID)
+    }
+
+    static func directory(for sessionID: UUID, startedAt: Date) -> URL {
+        SessionStore.prepareSession(id: sessionID, startedAt: startedAt)
+            ?? legacyDirectory(for: sessionID)
+    }
+
+    static func directory(for record: SessionRecord) -> URL {
+        SessionStore.archiveDirectory(for: record)
+    }
+
+    private static func legacyDirectory(for sessionID: UUID) -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         return base.appendingPathComponent("CueMe/recordings/\(sessionID.uuidString)", isDirectory: true)
     }
 
     static func selfURL(for sessionID: UUID) -> URL { directory(for: sessionID).appendingPathComponent(selfFilename) }
     static func otherURL(for sessionID: UUID) -> URL { directory(for: sessionID).appendingPathComponent(otherFilename) }
+
+    static func selfURL(for record: SessionRecord) -> URL {
+        preferredURL(filename: selfFilename, record: record)
+    }
+
+    static func otherURL(for record: SessionRecord) -> URL {
+        preferredURL(filename: otherFilename, record: record)
+    }
 
     static func exists(for sessionID: UUID) -> Bool {
         FileManager.default.fileExists(atPath: selfURL(for: sessionID).path)
@@ -140,5 +161,15 @@ enum MeetingRecording {
 
     static func delete(for sessionID: UUID) {
         try? FileManager.default.removeItem(at: directory(for: sessionID))
+    }
+
+    static func deleteLegacy(for sessionID: UUID) {
+        try? FileManager.default.removeItem(at: legacyDirectory(for: sessionID))
+    }
+
+    private static func preferredURL(filename: String, record: SessionRecord) -> URL {
+        let archived = directory(for: record).appendingPathComponent(filename)
+        if FileManager.default.fileExists(atPath: archived.path) { return archived }
+        return legacyDirectory(for: record.id).appendingPathComponent(filename)
     }
 }

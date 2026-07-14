@@ -64,4 +64,32 @@ final class SessionRecordTests: XCTestCase {
 
         XCTAssertTrue(decoded.diagnostics.events.isEmpty)
     }
+
+    func testLegacyRecordWithoutMemoryFieldsStillDecodes() throws {
+        let record = SessionRecord(
+            startedAt: Date(timeIntervalSince1970: 1_000),
+            mode: .meeting,
+            training: false,
+            conversationLang: "pt-BR",
+            nativeLang: "pt-BR",
+            goal: "",
+            transcript: [],
+            coachCards: [],
+            summaryBullets: []
+        )
+        let encoded = try JSONEncoder().encode(record)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "archiveFolderName")
+        object.removeValue(forKey: "notes")
+        object.removeValue(forKey: "takeaways")
+        object.removeValue(forKey: "artifacts")
+        let legacy = try JSONSerialization.data(withJSONObject: object)
+
+        let decoded = try JSONDecoder().decode(SessionRecord.self, from: legacy)
+
+        XCTAssertFalse(decoded.archiveFolderName.isEmpty)
+        XCTAssertTrue(decoded.notes.isEmpty)
+        XCTAssertTrue(decoded.takeaways.isEmpty)
+        XCTAssertTrue(decoded.artifacts.isEmpty)
+    }
 }

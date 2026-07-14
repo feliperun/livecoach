@@ -107,6 +107,27 @@ struct BriefEditor: View {
                     .disabled(app.isRunning)
                 }
 
+                Section {
+                    HStack {
+                        Image(systemName: "folder")
+                        Text(app.archivePath)
+                            .font(.system(size: 10.5, design: .monospaced))
+                            .lineLimit(2)
+                            .textSelection(.enabled)
+                        Spacer()
+                    }
+                    HStack {
+                        Button("Escolher pasta…") { app.chooseArchiveRoot() }
+                            .disabled(app.isSessionBusy)
+                        Button("Mostrar no Finder") { app.revealArchive() }
+                    }
+                } header: {
+                    Text("Arquivo das reuniões")
+                } footer: {
+                    Text("Cada sessão fica numa pasta com data e hora, com áudio, JSON e uma cópia Markdown.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+
                 if app.coachModel.isDeepSeek {
                     Section {
                         SecureField("API key (sk-…)", text: $deepseekKey)
@@ -130,7 +151,7 @@ struct BriefEditor: View {
 
                 if app.brief.mode.isPassive {
                     Section {
-                        Label("Neste modo o coach fica desligado — é só transcrição, resumo e gravação, com tema livre.", systemImage: "info.circle")
+                        Label("Neste modo o coach ao vivo fica desligado. Depois, você ainda pode resumir, extrair ações e perguntar sobre a reunião.", systemImage: "info.circle")
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
                     }

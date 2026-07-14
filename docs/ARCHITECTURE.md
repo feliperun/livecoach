@@ -26,10 +26,10 @@ ScreenCaptureKit (system, .other)┘        │                                 
                                                                                                         │
                                                                                           on stop() ────┘
                                                                                                         ▼
-                                                                              SessionRecord → SessionStore (JSON + audio)
+                                                                    SessionRecord → SessionStore (JSON + Markdown + audio)
                                                                                         │
                                                                                         ▼
-                                                                    HistoryView / WaveformPlayerView (browse + replay)
+                                                           SessionSidebar / SessionWorkspaceView (browse + replay + enrich)
 ```
 
 Single Swift process, zero third-party dependencies. Audio callbacks stay
@@ -53,7 +53,8 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
   hooks/user settings/tools/MCP disabled), `DeepSeekSession` (direct DeepSeek HTTP/SSE, stateless,
   non-thinking; keyed via `DeepSeekCredential` in the Keychain, see
   [ADR 0013](adr/0013-deepseek-coach-via-direct-api.md)) — both behind the
-  `CoachSession` protocol, `Summary` and `Coaching` lanes, `Prompts` (expert-panel
+  `CoachSession` protocol, `Summary` and `Coaching` lanes, `SessionPostProcessor`
+  (saved-session summaries, takeaways and questions), `Prompts` (expert-panel
   coach persona + per-mode playbooks, see [ADR 0011](adr/0011-expert-coach-persona-and-playbooks.md)).
 - **Model/** — `AppModel` (state + commands), `SessionCoordinator` (wires
   capture → STT → bus → lanes → UI, partial/final echo dedup, two-speed
@@ -62,12 +63,14 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
   watchdog recovery, provider failover, latency telemetry, recording and training),
   `TrainingCoordinator` (voice interviewer for practice/e2e testing),
   `HotkeyManager` (global ⌥Space show/hide), `SessionBrief` (+ `BriefStore`),
-  reusable `BriefProfile`s, `SessionRecord` (+ `SessionStore`, history persistence),
+  reusable `BriefProfile`s, `SessionRecord` (+ notes, takeaways, generated artifacts),
+  `SessionArchive`/`SessionStore` (portable JSON + Markdown history persistence),
   metadata-only runtime health/report policies, `Types`.
 - **Views/** — glance-first SwiftUI: `HeaderBar` with live channel meters,
   compact `QuestionBanner`, latest-only `CoachingPane`,
   `MeetingPanel` (passive-mode status when the coach is off), `TranscriptPane`,
-  `SummaryPane`, `BriefEditor`, `HistoryView` (+ `WaveformPlayerView`),
+  `SummaryPane`, `BriefEditor`, `SessionSidebar`, `SessionWorkspaceView`
+  (+ `WaveformPlayerView` and the live transport),
   `AboutView`, `Theme`, and `Highlighter` (on-device `NaturalLanguage` tiering of
   translated lines).
 
@@ -75,9 +78,10 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
 
 `Mode`: `interview` / `sales` / `difficult` / `meeting` / `custom`. All but
 `meeting` get a coach persona + playbook ([ADR 0011](adr/0011-expert-coach-persona-and-playbooks.md)).
-`meeting` is **passive** (`Mode.isPassive`) — free-topic conversations where
-coaching doesn't apply: the coach session is never built or triggered, but
-transcription/translation/summary/recording keep running
+`meeting` is **live-passive** (`Mode.isPassive`) — free-topic conversations where
+the live coach does not compete for attention: its session is never built or
+triggered, but transcription/translation/summary/recording keep running. Saved
+meetings can still use the post-session memory assistant
 ([ADR 0012](adr/0012-meeting-mode-and-synced-recording.md)).
 
 `trainingMode` is an orthogonal toggle (any non-passive mode): a
@@ -89,14 +93,16 @@ real exercise of the full capture→STT→translate→coach path, not a mock
 
 ## Persistence & history
 
-Every session is snapshotted on `stop()` to `Application Support/CueMe/`:
-`sessions/<id>.json` (transcript, coach cards, summary, brief snapshot) via
-`SessionStore`, and — if recording was on (default) — `recordings/<id>/{self,other}.caf`
-via `MeetingRecorder`. `HistoryView` lists/browses past sessions; a session can
-be copied/exported as JSON (no absolute paths embedded — audio is relocated by
-id at read time). `recordingStartedAt` anchors transcript seeking to the audio
-clock rather than the earlier UI-start clock. Deleting a session removes both
-the JSON and its recording.
+Every session is snapshotted on `stop()` into a date/time directory under the
+user-selected archive root. `SessionStore` writes `session.json` and a mandatory
+`session.md`; `MeetingRecorder` writes synchronized `self.caf` and `other.caf` in
+the same directory. The JSON stores a portable directory name, never an absolute
+path. `SessionSidebar` keeps history visible and `SessionWorkspaceView` provides
+the same coach/summary/transcript navigation after the event, plus timeline notes,
+takeaways and persisted post-session generation. `recordingStartedAt` anchors
+transcript seeking to the audio clock. Legacy Application Support JSON/audio is
+still discovered and played back during migration. Deleting a session removes
+its complete directory and any legacy counterpart.
 
 ## Runtime & hosting
 

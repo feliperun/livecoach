@@ -54,7 +54,6 @@ final class AppModel {
     var showTranscript: Bool = false
     var showSummary: Bool = false
     var showSettings: Bool = false
-    var showHistory: Bool = false
     var showPreflight: Bool = false
     var preflight: [PreflightCheck: PreflightStatus] = Dictionary(
         uniqueKeysWithValues: PreflightCheck.allCases.map { ($0, .idle) }
@@ -65,6 +64,15 @@ final class AppModel {
 
     // Histórico de sessões.
     var history: [SessionRecord] = []
+    var selectedSessionID: UUID?
+    var sidebarCollapsed = false
+    var sessionNotes: [SessionNote] = []
+    var sessionTakeaways: [SessionTakeaway] = []
+    var sessionArtifacts: [SessionArtifact] = []
+    var noteDraft = ""
+    var postSessionPrompt = ""
+    var postProcessingSessionID: UUID?
+    var postProcessingError: String?
     private var sessionStartedAt: Date?
     var sessionStartTime: Date? { sessionStartedAt }
     private(set) var currentSessionID: UUID?
@@ -198,10 +206,19 @@ final class AppModel {
         summaryBackendError = nil
         diagnostics = .init()
         coachFeedback = [:]
+        sessionNotes = []
+        sessionTakeaways = []
+        sessionArtifacts = []
+        noteDraft = ""
+        selectedSessionID = nil
+        postProcessingError = nil
         resetRuntimeHealth()
         recordDiagnostic(kind: .session, name: "started")
         sessionStartedAt = Date()
         currentSessionID = UUID()
+        if let currentSessionID, let sessionStartedAt {
+            _ = SessionStore.prepareSession(id: currentSessionID, startedAt: sessionStartedAt)
+        }
         let coord = SessionCoordinator(app: self)
         self.coordinator = coord
         Task { await coord.start() }
@@ -242,11 +259,10 @@ final class AppModel {
         }
     }
 
-    /// Salva a sessão atual no histórico (se teve conteúdo).
+    /// Saves the complete session snapshot in both JSON and Markdown.
     private func saveSessionRecord(stopResult: SessionStopResult) {
         defer { sessionStartedAt = nil; currentSessionID = nil }
-        guard let startedAt = sessionStartedAt,
-              !transcript.isEmpty || !coachCards.isEmpty else { return }
+        guard let startedAt = sessionStartedAt else { return }
         let record = SessionRecord(
             id: currentSessionID ?? UUID(),
             startedAt: startedAt,
@@ -262,15 +278,30 @@ final class AppModel {
             hasAudio: stopResult.audioDuration != nil,
             audioDuration: stopResult.audioDuration ?? 0,
             diagnostics: diagnostics,
-            coachFeedback: coachFeedback
+            coachFeedback: coachFeedback,
+            notes: sessionNotes,
+            takeaways: sessionTakeaways,
+            artifacts: sessionArtifacts
         )
         SessionStore.save(record)
-        history.insert(record, at: 0)
+        replaceHistoryRecord(record)
+        selectedSessionID = record.id
+        if backendAvailable, !record.transcript.isEmpty {
+            Task {
+                if record.summaryBullets.isEmpty { await generateSummary(for: record.id) }
+                if record.takeaways.isEmpty { await generateTakeaways(for: record.id) }
+            }
+        }
     }
 
     func deleteHistory(_ id: UUID) {
-        SessionStore.delete(id)
+        if let record = history.first(where: { $0.id == id }) {
+            SessionStore.delete(record)
+        } else {
+            SessionStore.delete(id)
+        }
         history.removeAll { $0.id == id }
+        if selectedSessionID == id { selectedSessionID = nil }
     }
 
     func ask() {

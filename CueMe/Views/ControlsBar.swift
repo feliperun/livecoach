@@ -64,7 +64,7 @@ struct HeaderBar: View {
                 Button("Testar setup") { app.showPreflight = true }
                     .disabled(app.isSessionBusy)
                 Button("Buscar atualizações…") { app.checkForUpdates() }
-                Button("Histórico") { app.showHistory = true }
+                Button("Histórico") { app.sidebarCollapsed = false }
                 Button("Configurar sessão") { app.showSettings = true }
                     .disabled(app.isSessionBusy)
             } label: {

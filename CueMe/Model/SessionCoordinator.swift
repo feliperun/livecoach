@@ -158,10 +158,14 @@ final class SessionCoordinator {
         tasks.append(routeAudio(from: capture))
 
         // Gravação do áudio original, sincronizada com a transcrição (opt-out).
-        if app.recordAudio, let sessionID = app.currentSessionID {
+        if app.recordAudio,
+           let sessionID = app.currentSessionID,
+           let sessionStartedAt = app.sessionStartTime {
             let rec = MeetingRecorder()
             do {
-                recordingStartedAt = try await rec.start(directory: MeetingRecording.directory(for: sessionID))
+                recordingStartedAt = try await rec.start(
+                    directory: MeetingRecording.directory(for: sessionID, startedAt: sessionStartedAt)
+                )
                 self.recorder = rec
             } catch {
                 log.error("Falha ao iniciar gravação: \(error.localizedDescription, privacy: .public)")
