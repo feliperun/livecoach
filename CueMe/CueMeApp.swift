@@ -10,10 +10,10 @@ struct CueMeApp: App {
         WindowGroup {
             RootView()
                 .environment(app)
-                .frame(minWidth: 380, minHeight: 520)
+                .frame(minWidth: 760, minHeight: 560)
         }
         .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 460, height: 720)
+        .defaultSize(width: 1_020, height: 760)
         .commands {
             AboutCommand()
             CommandGroup(after: .windowArrangement) {
@@ -89,7 +89,10 @@ private struct MenuBarContent: View {
         Button("Buscar atualizações…") { app.checkForUpdates() }
         Button("Abrir Camera Rail") { openWindow(id: "camera-rail") }
         Button("Testar setup") { app.showPreflight = true }
-        Button("Histórico de sessões") { app.showHistory = true }
+        Button("Histórico de sessões") {
+            app.sidebarCollapsed = false
+            HotkeyManager.showMainWindow()
+        }
         Button("Sobre o CueMe") { openWindow(id: "about") }
         Button("Sair") { NSApp.terminate(nil) }
             .keyboardShortcut("q")

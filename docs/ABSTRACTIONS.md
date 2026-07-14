@@ -14,9 +14,10 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
    `.other`). It also emits `AudioCaptureEvent` level/health signals and owns
    bounded recovery. This is the *only* place that knows about audio hardware.
 2. **Understand** (`STT/`, `Audio/MeetingRecorder`) — turns `AudioChunk` into
-   meaning or a persisted artifact: `NativeTranscriber` → `TranscriptEvent`
-   (on-device `SpeechAnalyzer`), `TranslationPipe` → translated text (on-device
-   `Translation`), `MeetingRecorder` → two timestamp-synced `.caf` files.
+   meaning or a persisted artifact: the selected `SttProvider` creates either
+   `NativeTranscriber` (on-device `SpeechAnalyzer`) or `DeepgramTranscriber`
+   (Nova-3 streaming) → `TranscriptEvent`, `TranslationPipe` → translated text (on-device
+   `Translation`), `MeetingRecorder` → two timestamp-synced AAC-LC `.m4a` files.
 3. **Bus** (`Bus/TranscriptBus`) — the single actor all `TranscriptEvent`s pass
    through. Fans out to subscribers (coach, summary, UI) and keeps the rolling
    window (`[Turn]`) that lanes read for context. Nothing downstream talks to
@@ -27,8 +28,10 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
    `ClaudeClient.makeCoachSession` picks by the selected `CoachModel`.
    `CoachingLane`/`SummaryLane` wrap a session with a specific prompt
    (`Prompts.swift`) and parsing (`CoachCardParser`), backend-agnostic.
-   `TrainingCoordinator` is a sibling brain that *speaks* (via
-   `AVSpeechSynthesizer`) instead of coaching.
+  `TrainingCoordinator` is a sibling brain that *speaks* (via
+  `AVSpeechSynthesizer`) instead of coaching.
+   `ContextGlossaryGenerator` is a bounded preflight brain: it turns selected
+   local `MeetingContext` documents into cached Deepgram keyterms before capture.
 5. **Orchestration** (`Model/SessionCoordinator`) — the only thing that wires
    layers 1–4 together for a live session: starts capture, routes chunks to STT
    and the recorder, triggers the coach on turn-end, applies echo dedup. Lives
@@ -36,9 +39,10 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 6. **State** (`Model/AppModel`) — the single `@Observable` source of truth the
    UI reads. `SessionCoordinator` pushes into it; it never reaches back into the
    coordinator except through the command methods (`start()`, `stop()`, `ask()`).
-7. **Persistence** (`Model/SessionRecord` + `SessionStore`, `Audio/MeetingRecording`)
-   — snapshots a finished session to disk (JSON + audio files) and reads it back
-   for history browsing. Pure data + file I/O, no live-session dependencies.
+7. **Persistence** (`SessionRecord`, `SessionArchive`/`SessionStore`,
+   `Audio/MeetingRecording`) — snapshots a session into one portable directory:
+   typed JSON, mandatory human-readable Markdown and synchronized audio. Notes,
+   takeaways and generated artifacts rewrite both state representations.
 8. **Views** (`Views/`) — SwiftUI only. Reads `AppModel`/`SessionRecord`, calls
    `AppModel` command methods, never touches `SessionCoordinator` or the audio
    layer directly.
@@ -50,6 +54,7 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 | Microphone | `AVAudioEngine` in `AudioCapture` | Tagged `.self`. |
 | System/app audio | `ScreenCaptureKit` in `AudioCapture` | Tagged `.other`; needs Screen & System Audio Recording permission; `excludesCurrentProcessAudio` toggles for training mode self-capture. |
 | Speech-to-text | `SpeechAnalyzer`/`SpeechTranscriber` in `NativeTranscriber` | On-device, macOS 26 only. |
+| Cloud speech-to-text (opt-in) | Deepgram Nova-3 WebSocket in `DeepgramTranscriber` | Separate stream per capture origin; key in Keychain; sends live PCM + keyterms. |
 | Translation | `Translation` framework via `TranslationPipe` | On-device; `TranslationSession` is non-Sendable, confined via `nonisolated(unsafe)` at the `.translationTask` boundary — don't let it cross actors any other way. |
 | Text-to-speech | `AVSpeechSynthesizer` in `TrainingCoordinator` | Speaks the interviewer's questions in training mode. |
 | LLM brain (default) | Claude Code CLI (`claude -p`, stream-json) via `ClaudeSession` | No API key — reuses the user's own CLI login. See [ADR 0005](adr/0005-llm-brain-via-claude-cli.md). |
@@ -57,7 +62,7 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 | Word-class tagging | `NaturalLanguage`/`NLTagger` in `Highlighter` | On-device; tiers translated text for fast scanning. |
 | Audio playback | Two `AVAudioPlayer`s in `MeetingPlayer` | Synced via a shared `deviceCurrentTime` anchor, not a mixer graph. |
 | CV import | `PDFKit` in `BriefEditor` | Extracts text from a pasted/imported résumé. |
-| Persistence | `FileManager` + `JSONEncoder`/`Decoder` in `SessionStore`/`BriefStore` | Application Support, non-sandboxed. |
+| Persistence | `FileManager` + `JSONEncoder`/`Decoder` in `SessionStore`/`BriefStore`/`MeetingContextStore` | User-selectable session archive; briefs, reusable contexts and glossary cache in Application Support. |
 | Packaging | `xcodebuild` + `hdiutil` in `scripts/package.sh` | Local only — see [Getting Started](GETTING-STARTED.md) and [Packaging](PACKAGING.md). |
 
 ## Contracts & invariants
@@ -67,10 +72,14 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
   ([ADR 0007](adr/0007-speaker-by-origin-and-echo-dedup.md)).
   Partial and final text may still echo across physical channels; confirmed echo
   is removed from both the UI and the rolling `TranscriptBus` context.
-- **The coach's only source of truth about the user is the brief + CV.** The
+- **STT providers preserve one session per capture origin.** Native and Deepgram
+  must emit the same `TranscriptEvent` contract; switching providers cannot
+  introduce diarization or merge mic/system audio.
+- **The coach's only source of truth is the brief + selected contexts + CV.** The
   system prompt explicitly forbids using ambient CLI context; never weaken this
   when editing `Prompts.coachSystem` ([ADR 0008](adr/0008-coach-ux-and-context-safety.md)).
-  `Mode.isPassive` (meeting mode) means the coach is never constructed or
+  Context documents are user-authored and explicit; ambient CLI context remains
+  forbidden. `Mode.isPassive` means the coach is never constructed or
   triggered at all — see `SessionCoordinator.buildBrain`/`consumeBusForCoaching`.
 - **Coach output is always the 4-line card format or the literal string `NADA`.**
   `CoachCardParser` depends on the exact labels (`GUIA:`/`DIGA:`/`PT:`/`KEY:`); a
@@ -88,12 +97,19 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 - **Audio replay uses the recorder's clock, not the Start-button clock.**
   `SessionRecord.recordingStartedAt` is persisted with the stop result; legacy
   records fall back to `startedAt`.
+- **New recordings use portable, speech-quality AAC-LC.** Each speaker is stored
+  separately as mono 48 kHz/128 kbps `.m4a`; STT keeps its independent 16 kHz
+  conversion. `MeetingRecording` must continue resolving legacy `.caf` files.
 - **A session is never silently healthy.** Mic and system channel states are
   independent; digital-zero mic data and an interrupted `SCStream` must be
   surfaced and repaired or remain visibly unavailable ([ADR 0014](adr/0014-per-channel-capture-health.md)).
-- **Recordings are located by session id, never by a stored path.**
-  `MeetingRecording.directory(for:)` derives the path from the UUID; exported
-  session JSON stays portable across machines/reinstalls.
+- **Recordings are located by a portable session directory name, never by an
+  absolute stored path.** `SessionRecord.archiveFolderName` combines timestamp
+  and short UUID; `MeetingRecording` resolves it against the current archive root
+  and falls back to the legacy UUID directory.
+- **Markdown mirrors durable session state.** Any saved mutation to notes,
+  takeaways, summary or generated artifacts goes through `SessionStore.save`,
+  which rewrites `session.json` and `session.md` together.
 - **`ClaudeSession` always spawns from an isolated empty cwd with hooks
   disabled.** This is the containment boundary against the CLI leaking the
   *user's own* project context into the coach's output.

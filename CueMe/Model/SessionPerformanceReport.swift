@@ -19,14 +19,11 @@ struct SessionPerformanceReport: Sendable, Equatable {
         coachRequests = diagnostics.count("requested")
         coachCompleted = diagnostics.count("completed")
         coveragePercent = coachRequests == 0 ? 0 : Int((Double(coachCompleted) / Double(coachRequests) * 100).rounded())
-        let latencies = diagnostics.events
-            .filter { $0.name == "first_phrase" }
-            .compactMap(\.durationMs)
-            .sorted()
+        let latencies = diagnostics.durationValues("first_phrase").sorted()
         firstPhraseP50Ms = Self.percentile(latencies, 0.50)
         firstPhraseP95Ms = Self.percentile(latencies, 0.95)
-        recoveries = diagnostics.events.filter { $0.kind == .recovery }.count
-        errors = diagnostics.events.filter { $0.kind == .error }.count
+        recoveries = diagnostics.count(kind: .recovery)
+        errors = diagnostics.count(kind: .error)
     }
 
     private static func percentile(_ values: [Int64], _ p: Double) -> Int64? {

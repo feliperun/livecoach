@@ -1,44 +1,44 @@
 import SwiftUI
 
-/// Identidade visual do CueMe — dark "command center".
-/// Fundo profundo, acento violeta→ciano, verde-menta pro coach, glow sutil.
+/// Calm, high-contrast workspace tokens. Static layers keep rendering cheap.
 enum Theme {
-    // Fundo em camadas (gradiente profundo, quase-preto azulado).
-    static let bgTop = Color(red: 0.055, green: 0.065, blue: 0.10)
-    static let bgBottom = Color(red: 0.035, green: 0.04, blue: 0.06)
+    static let canvas = Color(red: 0.035, green: 0.043, blue: 0.062)
+    static let sidebar = Color(red: 0.046, green: 0.055, blue: 0.078)
+    static let panel = Color(red: 0.065, green: 0.076, blue: 0.104)
+    static let panelRaised = Color(red: 0.082, green: 0.096, blue: 0.130)
+    static let interactive = Color.white.opacity(0.055)
+    static let divider = Color.white.opacity(0.075)
 
-    // Superfícies (cards/painéis).
-    static let surface = Color.white.opacity(0.045)
-    static let surfaceStroke = Color.white.opacity(0.08)
+    static let violet = Color(red: 0.48, green: 0.55, blue: 1.0)
+    static let cyan = Color(red: 0.32, green: 0.72, blue: 0.98)
+    static let mint = Color(red: 0.32, green: 0.84, blue: 0.66)
+    static let amber = Color(red: 0.94, green: 0.69, blue: 0.35)
+    static let rose = Color(red: 0.96, green: 0.39, blue: 0.48)
 
-    // Acentos.
-    static let violet = Color(red: 0.55, green: 0.42, blue: 1.0)
-    static let cyan = Color(red: 0.30, green: 0.82, blue: 1.0)
-    static let mint = Color(red: 0.30, green: 0.95, blue: 0.65)
-    static let amber = Color(red: 1.0, green: 0.72, blue: 0.30)
-    static let rose = Color(red: 1.0, green: 0.40, blue: 0.50)
+    static let surface = panel
+    static let surfaceStroke = divider
 
     /// Gradiente de marca (violeta → ciano).
     static let brand = LinearGradient(
-        colors: [violet, cyan],
-        startPoint: .topLeading, endPoint: .bottomTrailing
+        colors: [violet, Color(red: 0.43, green: 0.76, blue: 1.0)],
+        startPoint: .leading, endPoint: .trailing
     )
 
     /// Gradiente do coach (menta → ciano).
     static let coach = LinearGradient(
         colors: [mint, cyan],
-        startPoint: .topLeading, endPoint: .bottomTrailing
+        startPoint: .leading, endPoint: .trailing
     )
 
     static let background = LinearGradient(
-        colors: [bgTop, bgBottom],
-        startPoint: .top, endPoint: .bottom
+        colors: [Color(red: 0.045, green: 0.054, blue: 0.078), canvas],
+        startPoint: .topLeading, endPoint: .bottomTrailing
     )
 }
 
 // MARK: - Componentes reutilizáveis
 
-/// Painel "vidro": superfície sutil + borda de 1px.
+/// Opaque panel with a subtle border; avoids runtime blur/material costs.
 struct GlassPanel: ViewModifier {
     var cornerRadius: CGFloat = 14
 
@@ -49,6 +49,7 @@ struct GlassPanel: ViewModifier {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .strokeBorder(Theme.surfaceStroke, lineWidth: 1)
             )
+            .shadow(color: Color.black.opacity(0.12), radius: 8, y: 3)
     }
 }
 
@@ -62,26 +63,14 @@ extension View {
 struct PulseDot: View {
     let active: Bool
     var health: RuntimeHealthLevel = .healthy
-    @State private var pulse = false
 
     var body: some View {
-        ZStack {
-            if active {
-                Circle()
-                    .fill(color.opacity(0.35))
-                    .frame(width: 16, height: 16)
-                    .scaleEffect(pulse ? 1.6 : 0.8)
-                    .opacity(pulse ? 0 : 0.9)
-                    .animation(.easeOut(duration: 1.4).repeatForever(autoreverses: false), value: pulse)
-            }
-            Circle()
-                .fill(active ? color : Color.secondary.opacity(0.5))
-                .frame(width: 8, height: 8)
-                .shadow(color: active ? color.opacity(0.8) : .clear, radius: 4)
-        }
+        Image(systemName: "circle.fill")
+            .font(.system(size: 8, weight: .bold))
+            .foregroundStyle(active ? color : Color.secondary.opacity(0.5))
+            .symbolEffect(.pulse, options: .repeating, isActive: active)
+            .shadow(color: active ? color.opacity(0.6) : .clear, radius: 3)
         .frame(width: 16, height: 16)
-        .onAppear { pulse = active }
-        .onChange(of: active) { _, on in pulse = on }
     }
 
     private var color: Color {
@@ -102,13 +91,11 @@ struct IconButtonStyle: ButtonStyle {
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(isOn ? Theme.cyan : .secondary)
             .frame(width: 28, height: 28)
-            .background(
-                Circle().fill(isOn ? Theme.cyan.opacity(0.15) : Color.white.opacity(configuration.isPressed ? 0.10 : 0.05))
-            )
-            .overlay(Circle().strokeBorder(isOn ? Theme.cyan.opacity(0.4) : Theme.surfaceStroke, lineWidth: 1))
+            .background(Circle().fill(isOn ? Theme.violet.opacity(0.18) : Theme.interactive))
+            .overlay(Circle().strokeBorder(isOn ? Theme.violet.opacity(0.45) : Theme.divider, lineWidth: 1))
             .contentShape(Circle())
             .scaleEffect(configuration.isPressed ? 0.94 : 1)
-            .animation(.spring(duration: 0.2), value: configuration.isPressed)
+            .animation(.snappy(duration: 0.16), value: configuration.isPressed)
     }
 }
 
@@ -130,8 +117,8 @@ struct PrimaryButtonStyle: ButtonStyle {
                 }
             }
             .overlay(Capsule().strokeBorder(danger ? Theme.rose.opacity(0.5) : .clear, lineWidth: 1))
-            .shadow(color: danger ? .clear : Theme.violet.opacity(0.4), radius: configuration.isPressed ? 2 : 8, y: 2)
+            .shadow(color: danger ? .clear : Theme.violet.opacity(0.22), radius: configuration.isPressed ? 1 : 5, y: 2)
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .animation(.spring(duration: 0.2), value: configuration.isPressed)
+            .animation(.snappy(duration: 0.16), value: configuration.isPressed)
     }
 }

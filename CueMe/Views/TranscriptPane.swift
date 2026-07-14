@@ -13,7 +13,7 @@ struct TranscriptPane: View {
                             line: line,
                             foreign: app.brief.isForeign,
                             nativeLang: app.brief.nativeLang,
-                            keyterms: app.brief.keyterms
+                            keyterms: app.brief.keyterms + app.generatedContextKeyterms
                         )
                         .id(line.id)
                     }
@@ -31,10 +31,13 @@ struct TranscriptPane: View {
 }
 
 private struct TranscriptRow: View {
+    @Environment(AppModel.self) private var app
     let line: TranscriptLine
     let foreign: Bool
     let nativeLang: String
     let keyterms: [String]
+    @State private var editing = false
+    @State private var draft = ""
 
     private var color: Color {
         line.speaker == .self ? Theme.cyan : Theme.violet
@@ -47,7 +50,7 @@ private struct TranscriptRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
-                Text(line.speaker.label.uppercased())
+                Text((app.participantNames[line.speaker] ?? line.speaker.label).uppercased())
                     .font(.system(size: 8.5, weight: .heavy, design: .rounded))
                     .tracking(0.5)
                     .foregroundStyle(color)
@@ -60,14 +63,43 @@ private struct TranscriptRow: View {
                 if !line.isFinal {
                     Text("…").font(.system(size: 10)).foregroundStyle(.secondary)
                 }
+                if line.wasEdited {
+                    Image(systemName: "pencil.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.amber)
+                        .help("Corrigido. Original: \(line.originalText ?? "")")
+                }
+                Spacer()
+                if line.isFinal {
+                    Button {
+                        draft = line.text
+                        editing.toggle()
+                    } label: { Image(systemName: editing ? "xmark" : "pencil") }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .help("Corrigir transcrição")
+                }
             }
 
-            Text(line.text)
-                .font(.system(size: 14, weight: isQuestion ? .semibold : .regular))
-                .foregroundStyle(line.isFinal ? .primary : .secondary)
-                .italic(!line.isFinal)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
+            if editing {
+                HStack {
+                    TextField("Correção", text: $draft, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 14))
+                        .onSubmit(save)
+                    Button(action: save) { Image(systemName: "checkmark.circle.fill") }
+                        .buttonStyle(.plain).foregroundStyle(Theme.mint)
+                }
+                .padding(7)
+                .background(Theme.interactive, in: RoundedRectangle(cornerRadius: 8))
+            } else {
+                Text(line.text)
+                    .font(.system(size: 14, weight: isQuestion ? .semibold : .regular))
+                    .foregroundStyle(line.isFinal ? .primary : .secondary)
+                    .italic(!line.isFinal)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             if foreign, line.isFinal {
                 if let translation = line.translation, !translation.isEmpty {
@@ -89,5 +121,10 @@ private struct TranscriptRow: View {
             isQuestion ? color.opacity(0.07) : .clear,
             in: RoundedRectangle(cornerRadius: 8)
         )
+    }
+
+    private func save() {
+        app.correctTranscript(lineID: line.id, text: draft)
+        editing = false
     }
 }

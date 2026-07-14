@@ -6,6 +6,7 @@ struct SttConfig: Sendable {
     var speaker: Speaker
     var localeIdentifier: String   // ex.: "en-US"
     var keyterms: [String]         // usado por providers de nuvem (ignorado pelo nativo)
+    var replacements: [String: String] = [:]
 }
 
 /// Protocolo plugável de STT. Cada sessão transcreve um fluxo e emite eventos
@@ -20,6 +21,33 @@ protocol SttSession: Actor {
 
 protocol SttProvider: Sendable {
     func makeSession(config: SttConfig) -> any SttSession
+}
+
+struct NativeSttProvider: SttProvider {
+    func makeSession(config: SttConfig) -> any SttSession {
+        NativeTranscriber(config: config)
+    }
+}
+
+struct DeepgramSttProvider: SttProvider {
+    let apiKey: String
+
+    func makeSession(config: SttConfig) -> any SttSession {
+        DeepgramTranscriber(config: config, apiKey: apiKey)
+    }
+}
+
+enum SttProviderFactory {
+    static func make(source: SttSource, deepgramAPIKey: String?) throws -> any SttProvider {
+        switch source {
+        case .native:
+            return NativeSttProvider()
+        case .deepgram:
+            let key = deepgramAPIKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !key.isEmpty else { throw DeepgramError.missingAPIKey }
+            return DeepgramSttProvider(apiKey: key)
+        }
+    }
 }
 
 enum SttError: LocalizedError {

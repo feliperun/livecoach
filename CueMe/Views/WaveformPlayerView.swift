@@ -9,19 +9,21 @@ struct WaveformPlayerView: View {
     let loading: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Button {
                 player.togglePlay()
             } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.black)
-                    .frame(width: 32, height: 32)
-                    .background(Theme.brand, in: Circle())
+                    .foregroundStyle(.white)
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 38, height: 38)
+                    .background(Theme.violet, in: Circle())
+                    .shadow(color: Theme.violet.opacity(0.2), radius: 8, y: 3)
             }
             .buttonStyle(.plain)
             .disabled(!player.isReady)
-            .opacity(player.isReady ? 1 : 0.4)
+            .opacity(player.isReady ? 1 : 0.28)
 
             VStack(alignment: .leading, spacing: 4) {
                 if loading {
@@ -31,6 +33,14 @@ struct WaveformPlayerView: View {
                             .font(.system(size: 10.5)).foregroundStyle(.secondary)
                     }
                     .frame(height: 40)
+                } else if !player.isReady {
+                    HStack(spacing: 6) {
+                        Image(systemName: "waveform.slash")
+                        Text("Áudio indisponível")
+                    }
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
                 } else {
                     WaveformCanvas(envelope: envelope, progress: progress) { fraction in
                         player.seek(to: fraction * player.duration)
@@ -44,10 +54,12 @@ struct WaveformPlayerView: View {
                 }
                 .font(.system(size: 9.5, design: .monospaced))
                 .foregroundStyle(.secondary)
+                .contentTransition(.numericText())
             }
         }
-        .padding(11)
-        .glassPanel(cornerRadius: 12)
+        .padding(12)
+        .background(Theme.panelRaised, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.divider))
     }
 
     private var progress: CGFloat {
@@ -85,13 +97,13 @@ private struct WaveformCanvas: View {
                     let h = max(2, CGFloat(amp) * size.height)
                     let y = (size.height - h) / 2
                     let rect = CGRect(x: x, y: y, width: max(1, barW - 1), height: h)
-                    let color: Color = x <= playedX ? Theme.mint : Color.white.opacity(0.16)
+                    let color: Color = x <= playedX ? Theme.violet : Color.white.opacity(0.14)
                     ctx.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(color))
                 }
                 var line = Path()
                 line.move(to: CGPoint(x: playedX, y: 0))
                 line.addLine(to: CGPoint(x: playedX, y: size.height))
-                ctx.stroke(line, with: .color(Theme.cyan), lineWidth: 1.5)
+                ctx.stroke(line, with: .color(Theme.cyan.opacity(0.9)), lineWidth: 1.5)
             }
             .contentShape(Rectangle())
             .gesture(

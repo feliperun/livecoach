@@ -5,6 +5,7 @@ enum Mode: String, Codable, CaseIterable, Sendable, Identifiable {
     case sales
     case difficult
     case meeting
+    case recording
     case custom
 
     var id: String { rawValue }
@@ -14,13 +15,14 @@ enum Mode: String, Codable, CaseIterable, Sendable, Identifiable {
         case .interview: return "Entrevista"
         case .sales: return "Vendas"
         case .difficult: return "Conversa difícil"
-        case .meeting: return "Gravar reunião"
+        case .meeting: return "Reunião assistida"
+        case .recording: return "Somente gravação"
         case .custom: return "Custom"
         }
     }
 
-    /// Modo de captura/transcrição pura — o coach fica de fora.
-    var isPassive: Bool { self == .meeting }
+    /// Captura/transcrição pura. Reuniões normais mantêm um coach pouco intrusivo.
+    var isPassive: Bool { self == .recording }
 }
 
 enum CoachModel: String, Codable, CaseIterable, Sendable, Identifiable {
@@ -54,6 +56,10 @@ enum CoachModel: String, Codable, CaseIterable, Sendable, Identifiable {
         }
     }
 
+    static func defaultSummaryModel(for coachModel: CoachModel) -> CoachModel {
+        coachModel.isDeepSeek ? .deepseekPro : .opus
+    }
+
     /// Resolve uma preferência persistida sem deixar o app apontando para um
     /// provedor indisponível quando o outro já está pronto.
     static func resolved(
@@ -69,14 +75,14 @@ enum CoachModel: String, Codable, CaseIterable, Sendable, Identifiable {
 
 enum SttSource: String, Codable, CaseIterable, Sendable, Identifiable {
     case native      // SpeechAnalyzer / SpeechTranscriber (on-device)
-    case assemblyAI  // reservado (Fase 2)
+    case deepgram    // Nova-3 streaming via WebSocket
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .native: return "Nativo (on-device)"
-        case .assemblyAI: return "AssemblyAI"
+        case .deepgram: return "Deepgram Nova-3"
         }
     }
 }
@@ -90,6 +96,7 @@ struct SessionBrief: Codable, Sendable, Equatable {
     var details: String
     var keyterms: [String]
     var cv: String?                // currículo completo (modo entrevista) — opcional
+    var contexts: [MeetingContext]? = nil // snapshots dos contextos ativos desta sessão
 
     static let `default` = SessionBrief(
         mode: .interview,

@@ -11,8 +11,10 @@ struct BriefEditor: View {
     @State private var importError: String?
     @State private var deepseekKey = ""
     @State private var deepseekBaseURL = ""
+    @State private var deepgramKey = ""
     @State private var selectedProfileID: UUID?
     @State private var profileName = ""
+    @State private var showingContexts = false
 
     private let langs = ["pt-BR", "en-US", "es-ES", "fr-FR", "de-DE", "it-IT"]
 
@@ -73,6 +75,9 @@ struct BriefEditor: View {
                     Picker("Modelo do live coach", selection: $app.coachModel) {
                         ForEach(CoachModel.allCases) { Text($0.label).tag($0) }
                     }
+                    Picker("Modelo da ata", selection: $app.summaryModel) {
+                        ForEach(CoachModel.allCases) { Text($0.label).tag($0) }
+                    }
                     Picker("Transcrição (STT)", selection: $app.sttSource) {
                         ForEach(SttSource.allCases) { Text($0.label).tag($0) }
                     }
@@ -107,7 +112,63 @@ struct BriefEditor: View {
                     .disabled(app.isRunning)
                 }
 
-                if app.coachModel.isDeepSeek {
+                Section {
+                    HStack {
+                        Label(
+                            app.selectedMeetingContexts.isEmpty
+                                ? "Nenhum contexto ativo"
+                                : "\(app.selectedMeetingContexts.count) contexto(s) ativo(s)",
+                            systemImage: "books.vertical"
+                        )
+                        Spacer()
+                        Button("Gerenciar…") { showingContexts = true }
+                            .disabled(app.isSessionBusy)
+                    }
+                    Picker("Modelo do glossário", selection: $app.glossaryModel) {
+                        ForEach(CoachModel.allCases) { Text($0.label).tag($0) }
+                    }
+                    HStack {
+                        glossaryStatus(app.glossaryGenerationState)
+                        Spacer()
+                        Button("Gerar agora") {
+                            Task { await app.generateContextGlossary() }
+                        }
+                        .disabled(
+                            app.selectedMeetingContexts.isEmpty
+                                || app.glossaryGenerationState == .generating
+                                || app.isSessionBusy
+                        )
+                    }
+                } header: {
+                    Text("Contextos inteligentes")
+                } footer: {
+                    Text("Ao iniciar com Deepgram, a LLM selecionada gera ou reutiliza até 100 keyterms dentro do limite de 500 tokens. Os contextos selecionados também orientam o coach e a ata.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+
+                Section {
+                    HStack {
+                        Image(systemName: "folder")
+                        Text(app.archivePath)
+                            .font(.system(size: 10.5, design: .monospaced))
+                            .lineLimit(2)
+                            .textSelection(.enabled)
+                        Spacer()
+                    }
+                    HStack {
+                        Button("Escolher pasta…") { app.chooseArchiveRoot() }
+                            .disabled(app.isSessionBusy)
+                        Button("Mostrar no Finder") { app.revealArchive() }
+                    }
+                } header: {
+                    Text("Arquivo das reuniões")
+                } footer: {
+                    Text("Cada sessão fica numa pasta com data e hora, com áudio, JSON e uma cópia Markdown.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+
+                if app.coachModel.isDeepSeek || app.summaryModel.isDeepSeek || app.glossaryModel.isDeepSeek {
                     Section {
                         SecureField("API key (sk-…)", text: $deepseekKey)
                             .textContentType(.password)
@@ -122,7 +183,49 @@ struct BriefEditor: View {
                     } header: {
                         Text("DeepSeek")
                     } footer: {
-                        Text("A key fica no Keychain. Com DeepSeek, o brief/CV e o contexto recente são enviados diretamente ao endpoint configurado.")
+                        Text("A key fica no Keychain. Brief, CV e contextos selecionados são enviados ao endpoint somente para as funções que usam DeepSeek.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if app.sttSource == .deepgram {
+                    Section {
+                        SecureField("API key", text: $deepgramKey)
+                            .textContentType(.password)
+                            .onChange(of: deepgramKey) { _, new in
+                                DeepgramCredential.setAPIKey(new)
+                                app.refreshBackendStatus()
+                            }
+                        Label(
+                            app.deepgramAvailable ? "Chave salva" : "Chave necessária",
+                            systemImage: app.deepgramAvailable ? "checkmark.circle.fill" : "key"
+                        )
+                        .font(.system(size: 11))
+                        .foregroundStyle(app.deepgramAvailable ? Theme.mint : Theme.amber)
+                        TextField("Glossário (separe por vírgulas)", text: Binding(
+                            get: { app.vocabulary.keyterms.joined(separator: ", ") },
+                            set: { value in
+                                var vocabulary = app.vocabulary
+                                vocabulary.keyterms = GlossaryTermPolicy.sanitized(value.split(separator: ",")
+                                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                                    .filter { !$0.isEmpty })
+                                app.vocabulary = vocabulary
+                            }
+                        ), axis: .vertical)
+                        .lineLimit(2...4)
+                        if !app.vocabulary.replacements.isEmpty {
+                            Label(
+                                "\(app.vocabulary.replacements.count) correções aprendidas",
+                                systemImage: "text.badge.checkmark"
+                            )
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.secondary)
+                        }
+                    } header: {
+                        Text("Deepgram Nova-3")
+                    } footer: {
+                        Text("A chave fica no Keychain. O glossário prioriza nomes e termos; correções feitas na transcrição são reaproveitadas nas próximas sessões.")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
@@ -130,7 +233,7 @@ struct BriefEditor: View {
 
                 if app.brief.mode.isPassive {
                     Section {
-                        Label("Neste modo o coach fica desligado — é só transcrição, resumo e gravação, com tema livre.", systemImage: "info.circle")
+                        Label("Neste modo o coach ao vivo fica desligado. Depois, você ainda pode resumir, extrair ações e perguntar sobre a reunião.", systemImage: "info.circle")
                             .font(.system(size: 11.5))
                             .foregroundStyle(.secondary)
                     }
@@ -181,9 +284,14 @@ struct BriefEditor: View {
             .formStyle(.grouped)
         }
         .frame(width: 560, height: 640)
+        .sheet(isPresented: $showingContexts) {
+            ContextLibraryView()
+                .environment(app)
+        }
         .onAppear {
             selectedProfileID = app.activeProfileID
             deepseekKey = DeepSeekCredential.apiKey ?? ""
+            deepgramKey = DeepgramCredential.apiKey ?? ""
             let stored = DeepSeekCredential.baseURL
             deepseekBaseURL = stored == DeepSeekCredential.defaultBaseURL ? "" : stored
         }
@@ -198,6 +306,28 @@ struct BriefEditor: View {
             case .failure(let error):
                 importError = error.localizedDescription
             }
+        }
+    }
+
+    @ViewBuilder
+    private func glossaryStatus(_ state: GlossaryGenerationState) -> some View {
+        switch state {
+        case .idle:
+            Label("Será preparado ao iniciar", systemImage: "sparkles")
+                .foregroundStyle(.secondary)
+        case .generating:
+            HStack(spacing: 7) {
+                ProgressView().controlSize(.small)
+                Text("Gerando glossário…")
+            }
+            .foregroundStyle(Theme.amber)
+        case .ready(let count):
+            Label("\(count) termos prontos", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(Theme.mint)
+        case .failed(let message):
+            Label(message, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(Theme.amber)
+                .lineLimit(2)
         }
     }
 

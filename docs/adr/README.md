@@ -52,9 +52,9 @@ proposed → active → superseded
 | [0003](0003-sentrux-structural-quality-gates.md) | Sentrux structural quality gates | active |
 | [0004](0004-native-macos-swift-app.md) | Native macOS 26 Swift app (no webview/driver) | active |
 | [0005](0005-llm-brain-via-claude-cli.md) | LLM brain via the Claude Code CLI, not the API | active |
-| [0006](0006-on-device-stt-and-translation.md) | On-device STT & translation; LLM for coaching | active |
+| [0006](0006-on-device-stt-and-translation.md) | On-device STT & translation; LLM for coaching | superseded by 0022 |
 | [0007](0007-speaker-by-origin-and-echo-dedup.md) | Speaker by capture origin, with echo dedup | active |
-| [0008](0008-coach-ux-and-context-safety.md) | Coach UX: terse, CV-grounded, leak-guarded | active |
+| [0008](0008-coach-ux-and-context-safety.md) | Coach UX: terse, CV-grounded, leak-guarded | superseded by 0024 |
 | [0009](0009-training-mode-voice-interviewer.md) | Training mode: voice interviewer + e2e harness | active |
 | [0010](0010-on-device-translation-highlighting.md) | On-device translation highlighting (tiered) | active |
 | [0011](0011-expert-coach-persona-and-playbooks.md) | Expert coach persona + per-mode playbooks | active |
@@ -63,6 +63,11 @@ proposed → active → superseded
 | [0014](0014-per-channel-capture-health.md) | Per-channel capture health and self-recovery | active |
 | [0015](0015-glance-first-live-ui.md) | Glance-first live coaching UI | active |
 | [0016](0016-observable-non-cancelling-coach-lanes.md) | Observable, non-cancelling coach lanes | active |
-| [0017](0017-fast-coach-two-speed.md) | Two-speed Fast Coach with an instant local cue | active |
+| [0017](0017-fast-coach-two-speed.md) | Two-speed Fast Coach with an instant local cue | superseded by 0023 |
 | [0018](0018-glanceable-runtime-and-signed-updates.md) | Glanceable runtime and signed updates | active |
 | [0019](0019-reliability-watchdog-and-provider-failover.md) | Runtime watchdog, provider failover, and post-session quality | active |
+| [0020](0020-session-memory-workspace-and-portable-archive.md) | Session memory workspace and portable human-readable archive | active |
+| [0021](0021-portable-high-quality-meeting-audio.md) | Portable high-quality meeting audio | active |
+| [0022](0022-optional-deepgram-streaming-stt.md) | Optional Deepgram streaming STT | active |
+| [0023](0023-adaptive-coach-and-incremental-minutes.md) | Adaptive coach and incremental meeting minutes | active |
+| [0024](0024-reusable-contexts-and-preflight-glossary.md) | Reusable contexts and cached preflight glossary | active |

@@ -27,9 +27,9 @@ open cueme/CueMe.xcodeproj
 # Select the CueMe scheme, ⌘R.
 ```
 
-No package manager, no dependencies to install, no `.env` — the project has
-zero third-party dependencies (100% native frameworks). DeepSeek is optional;
-its API key is stored in Keychain when selected. First launch prompts for Microphone (required) and, if you want the
+No package manager or SDK dependency is required — the project uses native
+frameworks. DeepSeek and Deepgram are optional; their API keys are stored as
+separate Keychain items when selected. First launch prompts for Microphone (required) and, if you want the
 other side of the conversation, Screen & System Audio Recording (optional).
 
 ## Daily commands
@@ -44,6 +44,13 @@ sentrux gate .            # no structural regression
 GitHub CI repeats the build and XCTest suite on a `macos-26` runner, then runs
 the Sentrux structural gates. Keep the local checks as the fast feedback path
 before pushing. See [AGENTS.md § CueMe-specific gotchas](../AGENTS.md#3b-cueme-specific-gotchas-hard-won--dont-re-learn-these).
+
+The opt-in Deepgram live smoke test uses a synthetic PCM16 WAVE file and an
+environment-provided key:
+
+```bash
+DEEPGRAM_API_KEY=... node scripts/test-deepgram-live.mjs /path/to/test.wav
+```
 
 ## Packaging a build
 

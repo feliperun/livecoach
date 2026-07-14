@@ -17,10 +17,19 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
     var transcript: [TranscriptLine]
     var coachCards: [CoachCard]
     var summaryBullets: [String]
+    var minutes: MeetingMinutes
+    var participantNames: [Speaker: String]
+    var coachModel: CoachModel?
+    var summaryModel: CoachModel?
+    var vocabulary: CustomVocabulary
     var hasAudio: Bool
     var audioDuration: TimeInterval
     var diagnostics: SessionDiagnostics
     var coachFeedback: [UUID: CoachFeedback]
+    var archiveFolderName: String
+    var notes: [SessionNote]
+    var takeaways: [SessionTakeaway]
+    var artifacts: [SessionArtifact]
 
     init(
         id: UUID = UUID(),
@@ -35,10 +44,19 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         transcript: [TranscriptLine],
         coachCards: [CoachCard],
         summaryBullets: [String],
+        minutes: MeetingMinutes = .empty,
+        participantNames: [Speaker: String] = [.self: "Você", .other: "Interlocutor"],
+        coachModel: CoachModel? = nil,
+        summaryModel: CoachModel? = nil,
+        vocabulary: CustomVocabulary = .init(),
         hasAudio: Bool = false,
         audioDuration: TimeInterval = 0,
         diagnostics: SessionDiagnostics = .init(),
-        coachFeedback: [UUID: CoachFeedback] = [:]
+        coachFeedback: [UUID: CoachFeedback] = [:],
+        archiveFolderName: String? = nil,
+        notes: [SessionNote] = [],
+        takeaways: [SessionTakeaway] = [],
+        artifacts: [SessionArtifact] = []
     ) {
         self.id = id
         self.startedAt = startedAt
@@ -52,10 +70,19 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         self.transcript = transcript
         self.coachCards = coachCards
         self.summaryBullets = summaryBullets
+        self.minutes = minutes
+        self.participantNames = participantNames
+        self.coachModel = coachModel
+        self.summaryModel = summaryModel
+        self.vocabulary = vocabulary
         self.hasAudio = hasAudio
         self.audioDuration = audioDuration
         self.diagnostics = diagnostics
         self.coachFeedback = coachFeedback
+        self.archiveFolderName = archiveFolderName ?? SessionArchive.folderName(startedAt: startedAt, id: id)
+        self.notes = notes
+        self.takeaways = takeaways
+        self.artifacts = artifacts
     }
 
     /// Decode tolerante: sessões salvas antes do gravador não têm hasAudio/audioDuration.
@@ -73,10 +100,22 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         transcript = try c.decode([TranscriptLine].self, forKey: .transcript)
         coachCards = try c.decode([CoachCard].self, forKey: .coachCards)
         summaryBullets = try c.decode([String].self, forKey: .summaryBullets)
+        minutes = try c.decodeIfPresent(MeetingMinutes.self, forKey: .minutes)
+            ?? (summaryBullets.isEmpty ? .empty : MeetingMinutes(overview: summaryBullets.joined(separator: " ")))
+        participantNames = try c.decodeIfPresent([Speaker: String].self, forKey: .participantNames)
+            ?? [.self: "Você", .other: "Interlocutor"]
+        coachModel = try c.decodeIfPresent(CoachModel.self, forKey: .coachModel)
+        summaryModel = try c.decodeIfPresent(CoachModel.self, forKey: .summaryModel)
+        vocabulary = try c.decodeIfPresent(CustomVocabulary.self, forKey: .vocabulary) ?? .init()
         hasAudio = try c.decodeIfPresent(Bool.self, forKey: .hasAudio) ?? false
         audioDuration = try c.decodeIfPresent(TimeInterval.self, forKey: .audioDuration) ?? 0
         diagnostics = try c.decodeIfPresent(SessionDiagnostics.self, forKey: .diagnostics) ?? .init()
         coachFeedback = try c.decodeIfPresent([UUID: CoachFeedback].self, forKey: .coachFeedback) ?? [:]
+        archiveFolderName = try c.decodeIfPresent(String.self, forKey: .archiveFolderName)
+            ?? SessionArchive.folderName(startedAt: startedAt, id: id)
+        notes = try c.decodeIfPresent([SessionNote].self, forKey: .notes) ?? []
+        takeaways = try c.decodeIfPresent([SessionTakeaway].self, forKey: .takeaways) ?? []
+        artifacts = try c.decodeIfPresent([SessionArtifact].self, forKey: .artifacts) ?? []
     }
 
     var duration: TimeInterval { max(0, endedAt.timeIntervalSince(startedAt)) }
@@ -93,6 +132,12 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
     var turnCount: Int { transcript.filter { $0.isFinal }.count }
     var isForeign: Bool { SessionBrief.baseCode(conversationLang) != SessionBrief.baseCode(nativeLang) }
 
+    func participantName(for speaker: Speaker) -> String {
+        let fallback = speaker.label
+        let value = participantNames[speaker]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.isEmpty ? fallback : value
+    }
+
     /// Nome de arquivo sugerido pra exportação.
     var exportFilename: String {
         let stamp = startedAt.formatted(.iso8601.year().month().day().dateSeparator(.dash))
@@ -106,43 +151,5 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         e.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         guard let data = try? e.encode(self), let s = String(data: data, encoding: .utf8) else { return "{}" }
         return s
-    }
-}
-
-/// Persistência do histórico — um JSON por sessão em Application Support.
-enum SessionStore {
-    private static func dir() -> URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let d = base.appendingPathComponent("CueMe/sessions", isDirectory: true)
-        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
-        return d
-    }
-
-    private static let encoder: JSONEncoder = {
-        let e = JSONEncoder(); e.dateEncodingStrategy = .iso8601; return e
-    }()
-    private static let decoder: JSONDecoder = {
-        let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d
-    }()
-
-    static func save(_ record: SessionRecord) {
-        guard let data = try? encoder.encode(record) else { return }
-        try? data.write(to: dir().appendingPathComponent("\(record.id.uuidString).json"), options: .atomic)
-    }
-
-    /// Todas as sessões, mais recentes primeiro.
-    static func loadAll() -> [SessionRecord] {
-        guard let files = try? FileManager.default.contentsOfDirectory(
-            at: dir(), includingPropertiesForKeys: nil
-        ) else { return [] }
-        return files
-            .filter { $0.pathExtension == "json" }
-            .compactMap { try? decoder.decode(SessionRecord.self, from: Data(contentsOf: $0)) }
-            .sorted { $0.startedAt > $1.startedAt }
-    }
-
-    static func delete(_ id: UUID) {
-        try? FileManager.default.removeItem(at: dir().appendingPathComponent("\(id.uuidString).json"))
-        MeetingRecording.delete(for: id)
     }
 }

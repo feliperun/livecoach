@@ -4,19 +4,27 @@ import SwiftUI
 struct HeaderBar: View {
     @Environment(AppModel.self) private var app
     @Environment(\.openWindow) private var openWindow
+    @State private var showParticipants = false
+    @State private var selfName = ""
+    @State private var otherName = ""
 
     var body: some View {
         @Bindable var app = app
 
         HStack(spacing: 8) {
-            // Espaço pros semáforos da janela (título escondido).
-            Spacer().frame(width: 58)
-
-            PulseDot(active: app.isRunning, health: app.runtimeHealth.level)
-            Text(app.statusText)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(app.isRunning ? .primary : .secondary)
-                .lineLimit(1)
+            if app.selectedSession != nil, !app.isSessionBusy {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.violet)
+                Text("Biblioteca")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+            } else {
+                PulseDot(active: app.isRunning, health: app.runtimeHealth.level)
+                Text(app.statusText)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(app.isRunning ? .primary : .secondary)
+                    .lineLimit(1)
+            }
 
             if app.isRunning || app.sessionState == .preparing {
                 ChannelHealthButton(
@@ -39,6 +47,33 @@ struct HeaderBar: View {
             Spacer()
 
             if app.isRunning {
+                Button {
+                    selfName = app.participantNames[.self] ?? "Você"
+                    otherName = app.participantNames[.other] ?? "Interlocutor"
+                    showParticipants.toggle()
+                } label: {
+                    Image(systemName: "person.2")
+                }
+                .buttonStyle(IconButtonStyle())
+                .help("Nomear participantes")
+                .popover(isPresented: $showParticipants) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("Participantes", systemImage: "person.2.fill")
+                            .font(.system(size: 12, weight: .bold))
+                        TextField("Você", text: $selfName)
+                        TextField("Interlocutor", text: $otherName)
+                        Button("Salvar") {
+                            app.setParticipantName(selfName, for: .self)
+                            app.setParticipantName(otherName, for: .other)
+                            showParticipants = false
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .textFieldStyle(.roundedBorder)
+                    .padding(14)
+                    .frame(width: 240)
+                }
+
                 Toggle(isOn: Binding(get: { app.silenceMode }, set: { _ in app.toggleSilence() })) {
                     Image(systemName: app.silenceMode ? "moon.fill" : "moon")
                 }
@@ -64,7 +99,7 @@ struct HeaderBar: View {
                 Button("Testar setup") { app.showPreflight = true }
                     .disabled(app.isSessionBusy)
                 Button("Buscar atualizações…") { app.checkForUpdates() }
-                Button("Histórico") { app.showHistory = true }
+                Button("Histórico") { app.sidebarCollapsed = false }
                 Button("Configurar sessão") { app.showSettings = true }
                     .disabled(app.isSessionBusy)
             } label: {
@@ -85,15 +120,23 @@ struct HeaderBar: View {
                 .disabled(app.sessionState == .preparing || app.sessionState == .stopping)
             }
 
-            Button(app.sessionState == .stopping ? "Salvando" : (app.isRunning ? "Parar" : "Iniciar")) {
+            Button(primaryTitle) {
                 app.isRunning ? app.stop() : app.start()
             }
             .buttonStyle(PrimaryButtonStyle(danger: app.isRunning))
             .keyboardShortcut(.return, modifiers: [.command])
             .disabled(app.sessionState == .preparing || app.sessionState == .stopping)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Theme.canvas.opacity(0.94))
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.divider).frame(height: 1) }
+    }
+
+    private var primaryTitle: String {
+        if app.sessionState == .stopping { return "Salvando" }
+        if app.isRunning { return "Parar" }
+        return app.selectedSession == nil ? "Iniciar" : "Gravar"
     }
 }
 

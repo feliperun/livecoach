@@ -43,25 +43,25 @@ final class SessionCoordinatorHeuristicsTests: XCTestCase {
         ))
     }
 
-    func testSummaryBackendFollowsSelectedCoachProvider() {
+    func testSummaryBackendUsesExactSelectedModel() {
         XCTAssertEqual(
             SessionCoordinator.SummaryBackendSelection.resolve(for: .deepseekPro),
-            .deepSeek(model: .deepseekFlash)
+            .deepSeek(model: .deepseekPro)
         )
         XCTAssertEqual(
             SessionCoordinator.SummaryBackendSelection.resolve(for: .sonnet),
-            .claude(model: ClaudeClient.fastModel)
+            .claude(model: CoachModel.sonnet.backendModel)
         )
     }
 
-    func testLiveCoachUsesFastTierAndManualKeepsSelectedTier() {
+    func testLiveAndManualCoachUseExactSelectedTier() {
         XCTAssertEqual(
             SessionCoordinator.CoachModelPlan.resolve(for: .deepseekPro),
-            .init(live: .deepseekFlash, manual: .deepseekPro)
+            .init(live: .deepseekPro, manual: .deepseekPro)
         )
         XCTAssertEqual(
             SessionCoordinator.CoachModelPlan.resolve(for: .opus),
-            .init(live: .sonnet, manual: .opus)
+            .init(live: .opus, manual: .opus)
         )
     }
 

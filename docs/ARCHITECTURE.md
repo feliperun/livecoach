@@ -7,16 +7,16 @@
 ## High-level flow
 
 ```
-AVAudioEngine (mic, .self) ─────┐
-                                ├─▶ AudioConverter (→16k mono PCM16) ─▶ NativeTranscriber (SpeechAnalyzer)
-ScreenCaptureKit (system, .other)┘        │                                    │
+AVAudioEngine (mic, .self) ─────┐                                        ┌─▶ NativeTranscriber (SpeechAnalyzer)
+                                ├─▶ SttProvider (→16k mono PCM16) ────────┤
+ScreenCaptureKit (system, .other)┘        │                               └─▶ DeepgramTranscriber (Nova-3 WebSocket)
                                            ▼                                   ▼
                                     MeetingRecorder                     TranscriptBus (actor)
-                                  (synced dual .caf files,     ┌────────────┬────────────┬────────────┐
+                                  (synced dual .m4a files,     ┌────────────┬────────────┬────────────┐
                                    opt-out, on by default)     ▼            ▼            ▼            ▼
-                                                          Translation   Summary    Fast Coach     AppModel
-                                                          (on-device,   (fast,     (Flash/Sonnet, (@Observable,
-                                                           TranslationPipe) separate) DIGA-first) MainActor)
+                                                          Translation   Minutes      Coach        AppModel
+                                                          (on-device,   (incremental, (adaptive,  (@Observable,
+                                                           TranslationPipe) separate) selected)   MainActor)
                                                                                                         ▼
                                               TrainingCoordinator ──speaks (TTS)──▶ (captured back as .other)
                                               (voice interviewer, opt-in)
@@ -26,10 +26,10 @@ ScreenCaptureKit (system, .other)┘        │                                 
                                                                                                         │
                                                                                           on stop() ────┘
                                                                                                         ▼
-                                                                              SessionRecord → SessionStore (JSON + audio)
+                                                                    SessionRecord → SessionStore (JSON + Markdown + audio)
                                                                                         │
                                                                                         ▼
-                                                                    HistoryView / WaveformPlayerView (browse + replay)
+                                                           SessionSidebar / SessionWorkspaceView (browse + replay + enrich)
 ```
 
 Single Swift process, zero third-party dependencies. Audio callbacks stay
@@ -41,44 +41,54 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
 - **Audio/** — `AudioCapture` (mic via `AVAudioEngine` + system via
   `ScreenCaptureKit`, tagged by origin, per-channel level/health events,
   digital-silence detection and bounded system-stream recovery, opt-in AEC),
-  `AudioConverter`, `MeetingRecorder` (writes two timestamp-synced `.caf` files
-  for later playback), `MeetingPlayer` (two `AVAudioPlayer`s synced via
+  `AudioConverter`, `MeetingRecorder` (writes two timestamp-synced AAC-LC `.m4a`
+  files at 48 kHz/128 kbps for later playback), `MeetingPlayer` (two
+  `AVAudioPlayer`s synced via
   `deviceCurrentTime`), `WaveformGenerator` (background amplitude envelope for
   the player UI).
-- **STT/** — `NativeTranscriber` (`SpeechAnalyzer`/`SpeechTranscriber`, on-device),
+- **STT/** — provider abstraction with `NativeTranscriber`
+  (`SpeechAnalyzer`/`SpeechTranscriber`, default and on-device) or opt-in
+  `DeepgramTranscriber` (Nova-3 WebSocket, continuous mono PCM16 resampling,
+  endpointed partial/final assembly and Keychain credential), plus
   `TranslationPipe` (feeds Apple `Translation` from the `.translationTask`).
-- **Bus/** — `TranscriptBus` actor: fan-out `AsyncStream` + rolling window.
+- **Bus/** — `TranscriptBus` actor: fan-out `AsyncStream`, durable turn context,
+  incremental cursors and correction updates.
 - **Brain/** — `ClaudeClient` (locates the `claude` CLI), `ClaudeSession`
   (a long-lived `claude -p` streaming-json process, prewarmed, isolated cwd +
   hooks/user settings/tools/MCP disabled), `DeepSeekSession` (direct DeepSeek HTTP/SSE, stateless,
   non-thinking; keyed via `DeepSeekCredential` in the Keychain, see
   [ADR 0013](adr/0013-deepseek-coach-via-direct-api.md)) — both behind the
-  `CoachSession` protocol, `Summary` and `Coaching` lanes, `Prompts` (expert-panel
+  `CoachSession` protocol, `Summary` and `Coaching` lanes, `SessionPostProcessor`
+  (saved-session summaries, takeaways and questions), `Prompts` (expert-panel
   coach persona + per-mode playbooks, see [ADR 0011](adr/0011-expert-coach-persona-and-playbooks.md)).
+- **Context preflight** — reusable `MeetingContext` documents are selected per
+  profile/session; `ContextGlossaryGenerator` asks the chosen LLM for bounded
+  Nova-3 keyterms before capture, reusing a content-addressed local cache when
+  inputs are unchanged ([ADR 0024](adr/0024-reusable-contexts-and-preflight-glossary.md)).
 - **Model/** — `AppModel` (state + commands), `SessionCoordinator` (wires
-  capture → STT → bus → lanes → UI, partial/final echo dedup, two-speed
-  manual/live coach queues with urgent-question bypass, instant local cues,
-  latest-pending coalescing, adaptive confidence gating, independent capture/STT
+  capture → STT → bus → lanes → UI, partial/final echo dedup, independently
+  swappable coach/minutes models, semantic per-mode triggers, stable navigable
+  cards, incremental structured minutes, latest-pending coalescing, independent capture/STT
   watchdog recovery, provider failover, latency telemetry, recording and training),
   `TrainingCoordinator` (voice interviewer for practice/e2e testing),
   `HotkeyManager` (global ⌥Space show/hide), `SessionBrief` (+ `BriefStore`),
-  reusable `BriefProfile`s, `SessionRecord` (+ `SessionStore`, history persistence),
+  reusable `BriefProfile`s, `SessionRecord` (+ notes, takeaways, generated artifacts),
+  `SessionArchive`/`SessionStore` (portable JSON + Markdown history persistence),
   metadata-only runtime health/report policies, `Types`.
 - **Views/** — glance-first SwiftUI: `HeaderBar` with live channel meters,
   compact `QuestionBanner`, latest-only `CoachingPane`,
   `MeetingPanel` (passive-mode status when the coach is off), `TranscriptPane`,
-  `SummaryPane`, `BriefEditor`, `HistoryView` (+ `WaveformPlayerView`),
+  `SummaryPane`, `BriefEditor`, `SessionSidebar`, `SessionWorkspaceView`
+  (+ `WaveformPlayerView` and the live transport),
   `AboutView`, `Theme`, and `Highlighter` (on-device `NaturalLanguage` tiering of
   translated lines).
 
 ## Session modes
 
-`Mode`: `interview` / `sales` / `difficult` / `meeting` / `custom`. All but
-`meeting` get a coach persona + playbook ([ADR 0011](adr/0011-expert-coach-persona-and-playbooks.md)).
-`meeting` is **passive** (`Mode.isPassive`) — free-topic conversations where
-coaching doesn't apply: the coach session is never built or triggered, but
-transcription/translation/summary/recording keep running
-([ADR 0012](adr/0012-meeting-mode-and-synced-recording.md)).
+`Mode`: `interview` / `sales` / `difficult` / `meeting` / `recording` / `custom`.
+Meeting mode uses a selective playbook for questions, decisions, risks and
+ownership; `recording` is the sole live-passive mode. See
+[ADR 0023](adr/0023-adaptive-coach-and-incremental-minutes.md).
 
 `trainingMode` is an orthogonal toggle (any non-passive mode): a
 `TrainingCoordinator` session plays the interviewer, speaking questions via
@@ -89,20 +99,25 @@ real exercise of the full capture→STT→translate→coach path, not a mock
 
 ## Persistence & history
 
-Every session is snapshotted on `stop()` to `Application Support/CueMe/`:
-`sessions/<id>.json` (transcript, coach cards, summary, brief snapshot) via
-`SessionStore`, and — if recording was on (default) — `recordings/<id>/{self,other}.caf`
-via `MeetingRecorder`. `HistoryView` lists/browses past sessions; a session can
-be copied/exported as JSON (no absolute paths embedded — audio is relocated by
-id at read time). `recordingStartedAt` anchors transcript seeking to the audio
-clock rather than the earlier UI-start clock. Deleting a session removes both
-the JSON and its recording.
+Every session is snapshotted on `stop()` into a date/time directory under the
+user-selected archive root. `SessionStore` writes `session.json` and a mandatory
+`session.md`; `MeetingRecorder` writes synchronized `self.m4a` and `other.m4a` in
+the same directory. The JSON stores a portable directory name, never an absolute
+path. `SessionSidebar` keeps history visible and `SessionWorkspaceView` provides
+the same coach/summary/transcript navigation after the event, plus timeline notes,
+takeaways, editable timestamped notes, named participants, auditable transcript
+corrections and persisted post-session generation. `recordingStartedAt` anchors
+transcript seeking to the audio clock. Legacy `.caf` and Application Support
+JSON/audio are still discovered and played back during migration. Deleting a session removes
+its complete directory and any legacy counterpart.
 
 ## Runtime & hosting
 
 Native macOS 26 app (Apple Silicon). No app-owned backend. The default LLM runs
 through the user's local **Claude Code CLI** (`claude -p`); an opt-in DeepSeek
-coach calls its configured API directly. STT and translation are on-device.
+coach calls its configured API directly. STT is on-device by default; selecting
+Deepgram sends the two live PCM streams
+to Nova-3. Translation remains on-device in either configuration.
 
 ## Observability & quality
 
@@ -120,13 +135,20 @@ coach calls its configured API directly. STT and translation are on-device.
 
 ## Security model
 
-- Claude auth stays in the CLI. An optional DeepSeek key is stored in Keychain.
-- STT audio never leaves the device; translation is on-device.
+- Claude auth stays in the CLI. Optional DeepSeek and Deepgram keys are stored
+  as separate macOS Keychain items.
+- Native STT audio never leaves the device. When Deepgram is explicitly selected,
+  live 16 kHz PCM and configured keyterms are sent over authenticated TLS
+  WebSockets; translation stays on-device.
 - Coaching/summary text is sent to the selected provider: Anthropic through the
   user's isolated CLI session or DeepSeek through direct HTTPS. CLI sessions run
   from an empty cwd and the coach prompt walls off ambient context.
-- Recorded audio (`.caf` files) never leaves the device — it's written locally
-  and only read back by `MeetingPlayer` for in-app playback.
+- Selected reusable contexts are local at rest. Their content is sent only to
+  the explicitly selected LLM for glossary generation and to the configured
+  coach/minutes provider as an explicit session truth source.
+- Recorded audio (`.m4a`, with legacy `.caf` playback) is never uploaded as an
+  archive — it is written locally and only read back by `MeetingPlayer` for
+  in-app playback.
 - Permissions: Microphone (required) and Screen & System Audio Recording
   (optional, for the other party). Non-sandboxed dev build; hardened runtime on;
   stable `DEVELOPMENT_TEAM` signing so TCC grants persist across builds.

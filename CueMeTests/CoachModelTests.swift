@@ -30,4 +30,15 @@ final class CoachModelTests: XCTestCase {
             .deepseekFlash
         )
     }
+
+    func testSelectedDeepModelIsUsedForLiveAndManualCoach() {
+        let plan = SessionCoordinator.CoachModelPlan.resolve(for: .deepseekPro)
+        XCTAssertEqual(plan.live, .deepseekPro)
+        XCTAssertEqual(plan.manual, .deepseekPro)
+    }
+
+    func testSummaryDefaultsToDeepTierFromSameProvider() {
+        XCTAssertEqual(CoachModel.defaultSummaryModel(for: .deepseekFlash), .deepseekPro)
+        XCTAssertEqual(CoachModel.defaultSummaryModel(for: .sonnet), .opus)
+    }
 }

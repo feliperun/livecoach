@@ -62,6 +62,9 @@ struct TranscriptLine: Identifiable, Sendable, Hashable, Codable {
     var translation: String?
     var isFinal: Bool
     let ts: Date
+    var sourceTurnID: UUID?
+    var originalText: String?
+    var editedAt: Date?
 
     init(
         id: UUID = UUID(),
@@ -69,7 +72,10 @@ struct TranscriptLine: Identifiable, Sendable, Hashable, Codable {
         text: String,
         translation: String? = nil,
         isFinal: Bool,
-        ts: Date = Date()
+        ts: Date = Date(),
+        sourceTurnID: UUID? = nil,
+        originalText: String? = nil,
+        editedAt: Date? = nil
     ) {
         self.id = id
         self.speaker = speaker
@@ -77,6 +83,19 @@ struct TranscriptLine: Identifiable, Sendable, Hashable, Codable {
         self.translation = translation
         self.isFinal = isFinal
         self.ts = ts
+        self.sourceTurnID = sourceTurnID
+        self.originalText = originalText
+        self.editedAt = editedAt
+    }
+
+    var wasEdited: Bool { originalText != nil && editedAt != nil }
+
+    mutating func applyCorrection(_ corrected: String, at date: Date = Date()) {
+        let value = corrected.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, value != text else { return }
+        if originalText == nil { originalText = text }
+        text = value
+        editedAt = date
     }
 }
 

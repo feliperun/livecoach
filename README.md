@@ -38,27 +38,35 @@ subscription/login), so there's nothing to configure and no key to leak.
   the two sources are separate, *who spoke* is known by origin — no diarization.
   Acoustic-echo dedup keeps it working even on speakers (no headphones).
 - **Live transcription** with speaker labels, in a compact always-on-top window.
+- **Selectable STT** — Apple on-device by default or opt-in Deepgram Nova-3
+  streaming with domain keyterms and server-side turn detection.
 - **Line-by-line translation** via Apple's on-device **Translation** framework
   (~100–200ms, no key), with the key words bolded for fast scanning.
-- **Rolling summary** of what's been said so far.
+- **Incremental meeting minutes** — one evolving overview paragraph plus stable
+  topics with decisions, context and open points.
 - **Long-call watchdog** that recovers mic, system audio, and STT independently,
   with automatic Claude/DeepSeek failover before a slow provider responds.
 - **Reusable profiles and post-call quality** — save recurring setups, rate tips,
   and review coverage, P50/P95 latency, recoveries, and errors without uploading audio.
 - **Contextual coaching** — the "friend beside you": "they asked X → answer like
   this", a ready-to-say phrase in the conversation language + your native
-  translation + key vocabulary. Terse and emoji-cued for reading under pressure.
+  translation + key vocabulary. Meeting mode intervenes only for useful questions,
+  decisions, risks and next steps; cards remain stable and navigable.
 - **Session brief** (mode: interview / sales / difficult / meeting / custom) with
   your full **CV/résumé** (paste or import .pdf/.md/.txt) so hints point at your
   real stories. Plus a manual question box for mid-conversation.
-- **Meeting mode** for free-topic conversations — coaching turns off (it doesn't
-  fit an open agenda) while transcription, translation, and the rolling summary
-  keep running.
+- **Editable meeting memory** — name participants, edit timestamped notes, correct
+  transcript text with visible provenance, and teach Deepgram a persistent glossary.
+- **Reusable contexts** — keep separate product, customer, company and project
+  sources; select any combination before a meeting. The chosen LLM prepares a
+  cached, session-specific Deepgram glossary before recording starts.
+  A separate recording-only mode turns live coaching off.
 - **Session recording**, on by default — the original audio (both sides) is
-  recorded in sync with the transcript. Revisit any past session in the
+  recorded as portable, high-quality AAC-LC `.m4a` files in sync with the transcript.
+  Revisit any past session in the
   **history**: a visual waveform player where tapping a transcript line seeks
   and plays the audio from that moment, and the active line highlights live as
-  it plays back. Sessions can be copied/exported as JSON.
+  it plays back. Every session keeps JSON state plus a human-readable Markdown copy.
 
 Example (interview in English, native Portuguese):
 
@@ -130,8 +138,8 @@ summary, coaching):
    Screen Recording granted), have the other side speak. Their line appears
    under `[Interlocutor]` with a `↳` translation, and a coach card is generated
    automatically at the end of their turn. Speak yourself to see `[Você]` lines.
-5. **Summary:** after ~30s of conversation, the top-right pane fills with up to
-   5 bullets and refreshes as things progress.
+5. **Ata:** after the first meaningful batch, the pane shows an overview and
+   topic summaries, then updates at a rate that does not compete with the coach.
 6. **Silêncio** toggles the coach off (transcription keeps running).
 
 First call to each lane pays a one-time CLI cold start (~5–10s); subsequent
@@ -155,9 +163,9 @@ ScreenCaptureKit (sys) ──┘                                          │
                           provider = isolated Claude CLI or direct DeepSeek SSE
 ```
 
-- **Two-speed brain.** Live hints use the fast tier (DeepSeek Flash or Sonnet),
-  while manual asks keep the selected deep tier. Claude uses isolated `claude -p`
-  processes; DeepSeek uses direct SSE HTTP. Separate fast sessions produce summary.
+- **Independent live brains.** Coach and minutes use independently selected models
+  that can be switched during capture without restarting audio or STT. Claude uses
+  isolated `claude -p` processes; DeepSeek uses direct SSE HTTP.
 - **Translation is off the LLM** — Apple's on-device `Translation` framework, so
   the coach LLM is never blocked by per-line translation.
 - **Speaker by origin.** Mic = `self`, system audio = `other`. No diarization;
@@ -194,8 +202,9 @@ and accessibility use.
 
 ## Privacy
 
-- Speech-to-text is **on-device** (`SpeechAnalyzer`) — audio doesn't leave your
-  Mac for transcription.
+- Speech-to-text is **on-device by default** (`SpeechAnalyzer`). If you select
+  Deepgram, the two live PCM streams and configured keyterms are sent to Nova-3;
+  the API key remains in the macOS Keychain.
 - Translation stays on-device. Coach and summary use the selected provider:
   Claude CLI by default, or DeepSeek when explicitly configured. DeepSeek keys
   live in the macOS Keychain.

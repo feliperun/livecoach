@@ -7,7 +7,7 @@ actor TranscriptBus {
     private var turns: [Turn] = []
     private let maxTurns: Int
 
-    init(maxTurns: Int = 40) {
+    init(maxTurns: Int = 5_000) {
         self.maxTurns = maxTurns
     }
 
@@ -38,6 +38,13 @@ actor TranscriptBus {
     /// Janela rolante (últimos N turnos) para resumo e coach.
     func window() -> [Turn] { turns }
 
+    /// Devolve somente os turnos que ainda não foram consumidos e um cursor
+    /// opaco para a próxima leitura incremental.
+    func turns(since cursor: Int) -> (turns: [Turn], cursor: Int) {
+        let safeCursor = min(max(cursor, 0), turns.count)
+        return (Array(turns.dropFirst(safeCursor)), turns.count)
+    }
+
     /// Adiciona um turno de input manual do usuário (aparece no contexto do coach).
     func appendManual(_ text: String) {
         appendTurn(speaker: .self, text: text)
@@ -46,6 +53,12 @@ actor TranscriptBus {
     /// Remove um turno que depois se confirmou como eco do áudio de sistema.
     func removeTurn(id: UUID) {
         turns.removeAll { $0.id == id }
+    }
+
+    /// Mantém o contexto das raias alinhado quando o usuário corrige o texto.
+    func updateTurn(id: UUID, text: String) {
+        guard let index = turns.firstIndex(where: { $0.id == id }) else { return }
+        turns[index].text = text
     }
 
     func finish() {

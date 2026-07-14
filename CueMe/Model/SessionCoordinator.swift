@@ -16,7 +16,8 @@ final class SessionCoordinator {
     // Tradução saiu da LLM → framework nativo Apple (app.translationPipe). Coach fica livre.
     private var summaryLane = SummaryLane(session: nil)
     private var coachingLane = CoachingLane(live: nil, manual: nil)
-    private var sessions: [any CoachSession] = []
+    private var coachSessions: [any CoachSession] = []
+    private var summarySessions: [any CoachSession] = []
 
     private var capture: AudioCapture?
     private var micStt: (any SttSession)?
@@ -38,6 +39,9 @@ final class SessionCoordinator {
     private var speculativeDebounceTasks: [Speaker: Task<Void, Never>] = [:]
     private var speculativeText = ""
     private var summaryPolicy = SummarySchedulePolicy()
+    private var summaryCursor = 0
+    private var lastCoachTriggeredAt: Date?
+    private var lastCoachFingerprint: String?
     private var watchdog = RuntimeWatchdog()
     private var lastRecorderWriteFailures = 0
 
@@ -64,10 +68,7 @@ final class SessionCoordinator {
         let manual: CoachModel
 
         static func resolve(for selected: CoachModel) -> Self {
-            if selected.isDeepSeek {
-                return .init(live: .deepseekFlash, manual: selected)
-            }
-            return .init(live: .sonnet, manual: selected)
+            .init(live: selected, manual: selected)
         }
     }
 
@@ -77,8 +78,8 @@ final class SessionCoordinator {
 
         static func resolve(for coachModel: CoachModel) -> Self {
             coachModel.isDeepSeek
-                ? .deepSeek(model: .deepseekFlash)
-                : .claude(model: ClaudeClient.fastModel)
+                ? .deepSeek(model: coachModel)
+                : .claude(model: coachModel.backendModel)
         }
     }
 
@@ -110,15 +111,28 @@ final class SessionCoordinator {
         buildBrain(brief: brief)
 
         // STT por origem: um transcritor para o mic (self), outro para o sistema (other).
-        let mic = NativeTranscriber(config: SttConfig(
+        let provider: any SttProvider
+        do {
+            provider = try SttProviderFactory.make(
+                source: app.sttSource,
+                deepgramAPIKey: DeepgramCredential.apiKey
+            )
+        } catch {
+            await failStart(error.localizedDescription)
+            return
+        }
+        let vocabulary = app.sessionVocabulary()
+        let mic = provider.makeSession(config: SttConfig(
             speaker: .self,
             localeIdentifier: brief.conversationLang,
-            keyterms: brief.keyterms
+            keyterms: vocabulary.keyterms,
+            replacements: vocabulary.replacements
         ))
-        let system = NativeTranscriber(config: SttConfig(
+        let system = provider.makeSession(config: SttConfig(
             speaker: .other,
             localeIdentifier: brief.conversationLang,
-            keyterms: brief.keyterms
+            keyterms: vocabulary.keyterms,
+            replacements: vocabulary.replacements
         ))
         self.micStt = mic
         self.systemStt = system
@@ -158,10 +172,14 @@ final class SessionCoordinator {
         tasks.append(routeAudio(from: capture))
 
         // Gravação do áudio original, sincronizada com a transcrição (opt-out).
-        if app.recordAudio, let sessionID = app.currentSessionID {
+        if app.recordAudio,
+           let sessionID = app.currentSessionID,
+           let sessionStartedAt = app.sessionStartTime {
             let rec = MeetingRecorder()
             do {
-                recordingStartedAt = try await rec.start(directory: MeetingRecording.directory(for: sessionID))
+                recordingStartedAt = try await rec.start(
+                    directory: MeetingRecording.directory(for: sessionID, startedAt: sessionStartedAt)
+                )
                 self.recorder = rec
             } catch {
                 log.error("Falha ao iniciar gravação: \(error.localizedDescription, privacy: .public)")
@@ -187,9 +205,6 @@ final class SessionCoordinator {
         summaryDebounceTask = nil
         summaryTask?.cancel()
         summaryTask = nil
-        if summaryPolicy.hasUnsummarizedTurns {
-            await runSummary(final: true)
-        }
         pendingLiveCoach = nil
         pendingManualCoach = nil
         liveCoachDebounceTask?.cancel()
@@ -198,15 +213,22 @@ final class SessionCoordinator {
         liveCoachTask = nil
         manualCoachTask?.cancel()
         manualCoachTask = nil
-        for t in tasks { t.cancel() }
-        tasks.removeAll()
-
         training?.stop()
         training = nil
+        // Fecha primeiro as fontes e dá aos consumidores um instante para
+        // publicar os finals pendentes. A ata final passa a incluir o fim real
+        // da reunião, e o gravador drena os últimos chunks antes do teardown.
         capture?.finish()
         capture = nil
+        try? await Task.sleep(for: .milliseconds(120))
         await micStt?.finish()
         await systemStt?.finish()
+        try? await Task.sleep(for: .milliseconds(120))
+        if summaryPolicy.hasUnsummarizedTurns {
+            await runSummary(final: true)
+        }
+        for task in tasks { task.cancel() }
+        tasks.removeAll()
         micStt = nil
         systemStt = nil
         await bus.finish()
@@ -215,8 +237,9 @@ final class SessionCoordinator {
         let audioStart = recordingStartedAt
         recordingStartedAt = nil
 
-        for s in sessions { await s.shutdown() }
-        sessions.removeAll()
+        for session in coachSessions + summarySessions { await session.shutdown() }
+        coachSessions.removeAll()
+        summarySessions.removeAll()
         summaryLane = SummaryLane(session: nil)
         coachingLane = CoachingLane(live: nil, manual: nil)
         app.stopTranslation()
@@ -232,6 +255,9 @@ final class SessionCoordinator {
         speculativeDebounceTasks.removeAll()
         speculativeText = ""
         summaryPolicy = .init()
+        summaryCursor = 0
+        lastCoachTriggeredAt = nil
+        lastCoachFingerprint = nil
         watchdog = .init()
         lastRecorderWriteFailures = 0
         app.resetRuntimeHealth()
@@ -257,40 +283,44 @@ final class SessionCoordinator {
         // a pergunta manual funcionar, mas deixava o resumo permanentemente offline.
         let summarySystem = Prompts.summarySystem(brief: brief)
         let summaryPrimary: (any CoachSession)?
-        switch SummaryBackendSelection.resolve(for: app.coachModel) {
+        switch SummaryBackendSelection.resolve(for: app.summaryModel) {
         case .claude(let model):
             summaryPrimary = client.makeSession(model: model, system: summarySystem)
         case .deepSeek(let model):
             summaryPrimary = client.makeCoachSession(model: model, system: summarySystem)
         }
-        let summarySession = makeFailoverSession(primary: summaryPrimary, system: summarySystem)
+        let summarySession = makeFailoverSession(
+            primary: summaryPrimary,
+            selectedModel: app.summaryModel,
+            system: summarySystem
+        )
         if let summarySession {
             summaryLane = SummaryLane(session: summarySession)
-            sessions = [summarySession]
+            summarySessions = [summarySession]
         } else {
-            app.summaryBackendError = app.coachModel.isDeepSeek
+            app.summaryBackendError = app.summaryModel.isDeepSeek
                 ? "DeepSeek não configurada."
                 : "Claude CLI não encontrado."
         }
 
-        // Modo reunião é passivo (tema livre) — o coach não se aplica, não gasta sessão.
+        // Somente o modo de gravação pura não usa coach.
         guard !brief.mode.isPassive else { return }
 
         let coachSystem = Prompts.coachSystem(brief: brief)
         let modelPlan = CoachModelPlan.resolve(for: app.coachModel)
-        // A conversa ao vivo sempre usa o tier rápido. O modelo profundo escolhido
-        // fica reservado para perguntas manuais, onde alguns segundos extras cabem.
         let coachLive = makeFailoverSession(
             primary: client.makeCoachSession(model: modelPlan.live, system: coachSystem),
+            selectedModel: modelPlan.live,
             system: coachSystem
         )
         let coachManual = makeFailoverSession(
             primary: client.makeCoachSession(model: modelPlan.manual, system: coachSystem),
+            selectedModel: modelPlan.manual,
             system: coachSystem
         )
 
         coachingLane = CoachingLane(live: coachLive, manual: coachManual)
-        sessions += [coachLive, coachManual].compactMap { $0 }
+        coachSessions = [coachLive, coachManual].compactMap { $0 }
 
         guard let coachLive else {
             app.coachBackendError = app.coachModel.isDeepSeek
@@ -317,11 +347,12 @@ final class SessionCoordinator {
 
     private func makeFailoverSession(
         primary: (any CoachSession)?,
+        selectedModel: CoachModel,
         system: String
     ) -> (any CoachSession)? {
         guard let primary else { return nil }
         let secondary: (any CoachSession)?
-        if app.coachModel.isDeepSeek {
+        if selectedModel.isDeepSeek {
             secondary = client.makeSession(model: ClaudeClient.fastModel, system: system)
         } else {
             secondary = client.makeCoachSession(model: .deepseekFlash, system: system)
@@ -334,6 +365,68 @@ final class SessionCoordinator {
                 app?.setRuntimeHealth(.degraded, reason: "Trocando o motor da dica")
             }
         }
+    }
+
+    /// Troca o motor ao vivo sem reiniciar captura, STT ou gravação.
+    func switchCoachModel(to model: CoachModel) async {
+        guard app.isRunning, !app.brief.mode.isPassive else { return }
+        let system = Prompts.coachSystem(brief: app.brief)
+        let live = makeFailoverSession(
+            primary: client.makeCoachSession(model: model, system: system),
+            selectedModel: model,
+            system: system
+        )
+        let manual = makeFailoverSession(
+            primary: client.makeCoachSession(model: model, system: system),
+            selectedModel: model,
+            system: system
+        )
+        guard let live else {
+            app.coachBackendError = model.isDeepSeek ? "DeepSeek não configurada." : "Claude CLI não encontrado."
+            return
+        }
+        do {
+            try await live.prewarm()
+            let old = coachSessions
+            coachingLane = CoachingLane(live: live, manual: manual)
+            coachSessions = [live, manual].compactMap { $0 }
+            for session in old { await session.shutdown() }
+            app.coachBackendReady = true
+            app.coachBackendError = nil
+            app.recordDiagnostic(kind: .coach, name: "model_switched", detail: model.rawValue)
+        } catch {
+            await live.shutdown()
+            await manual?.shutdown()
+            app.coachBackendError = error.localizedDescription
+        }
+    }
+
+    func switchSummaryModel(to model: CoachModel) async {
+        guard app.isRunning else { return }
+        let system = Prompts.summarySystem(brief: app.brief)
+        let primary = client.makeCoachSession(model: model, system: system)
+        let session = makeFailoverSession(primary: primary, selectedModel: model, system: system)
+        guard let session else {
+            app.summaryBackendError = model.isDeepSeek ? "DeepSeek não configurada." : "Claude CLI não encontrado."
+            return
+        }
+        do {
+            try await session.prewarm()
+            let old = summarySessions
+            summaryLane = SummaryLane(session: session)
+            summarySessions = [session]
+            for oldSession in old { await oldSession.shutdown() }
+            app.summaryBackendError = nil
+            app.recordDiagnostic(kind: .summary, name: "model_switched", detail: model.rawValue)
+        } catch {
+            await session.shutdown()
+            app.summaryBackendError = error.localizedDescription
+        }
+    }
+
+    func correctTurn(id: UUID?, text: String) async {
+        guard let id else { return }
+        await bus.updateTurn(id: id, text: text)
     }
 
     func ask(_ text: String) async {
@@ -440,12 +533,25 @@ final class SessionCoordinator {
     }
 
     private func restartSTT(_ speaker: Speaker) async {
+        let vocabulary = app.sessionVocabulary()
         let config = SttConfig(
             speaker: speaker,
             localeIdentifier: app.brief.conversationLang,
-            keyterms: app.brief.keyterms
+            keyterms: vocabulary.keyterms,
+            replacements: vocabulary.replacements
         )
-        let replacement = NativeTranscriber(config: config)
+        let provider: any SttProvider
+        do {
+            provider = try SttProviderFactory.make(
+                source: app.sttSource,
+                deepgramAPIKey: DeepgramCredential.apiKey
+            )
+        } catch {
+            app.recordDiagnostic(kind: .error, name: "stt_recovery_failed", speaker: speaker)
+            app.setRuntimeHealth(.critical, reason: "Transcrição indisponível", sticky: true)
+            return
+        }
+        let replacement = provider.makeSession(config: config)
         do {
             try await replacement.start()
             switch speaker {
@@ -503,14 +609,15 @@ final class SessionCoordinator {
                 app.dropUnfinalized(speaker: .self)
                 return
             }
-            app.dismissActiveCoach()
             app.upsertLine(event)
             triggerSpeculativeCoachIfNeeded(event)
         }
     }
 
     private func triggerSpeculativeCoachIfNeeded(_ event: TranscriptEvent) {
-        guard !app.silenceMode, !app.brief.mode.isPassive else { return }
+        guard !app.silenceMode,
+              !app.brief.mode.isPassive,
+              app.brief.mode != .meeting else { return }
         var detector = speculativeDetectors[event.speaker] ?? .init()
         let shouldTrigger = detector.observe(event.text) { text in
             AdaptiveCoachTrigger.shouldTrigger(
@@ -592,7 +699,6 @@ final class SessionCoordinator {
                 app.dropUnfinalized(speaker: .self)
                 return
             }
-            app.dismissActiveCoach()
             await bus.publish(event)
             let lineID = app.upsertLine(event)
             recentMicFinals.append((lineID, event.id, event.text, Date()))
@@ -605,7 +711,7 @@ final class SessionCoordinator {
             // que a captura de sistema está ativa (stream sem sinal, caixa acústica,
             // roteamento da chamada). Perguntas sempre passam como locutor incerto;
             // o modelo decide se são uma deixa real ou responde NADA.
-            if Self.shouldTriggerUncertainCoach(
+            if app.brief.mode != .meeting, Self.shouldTriggerUncertainCoach(
                 text: event.text,
                 silenceMode: app.silenceMode,
                 passiveMode: app.brief.mode.isPassive
@@ -620,6 +726,9 @@ final class SessionCoordinator {
             }
         }
         app.recordDiagnostic(kind: .transcription, name: "stt_final", speaker: event.speaker)
+        if app.diagnostics.count("stt_final").isMultiple(of: 25) {
+            app.persistLiveSnapshot()
+        }
         watchdog.observeTranscript(event.speaker)
         scheduleSummaryAfterFinal()
     }
@@ -680,6 +789,22 @@ final class SessionCoordinator {
                 // Gatilho: interlocutor terminou um turno.
                 if event.speaker == .other, event.isFinal, event.isEndOfTurn {
                     if self.consumeMatchingSpeculative(event.text) { continue }
+                    let now = Date()
+                    guard CoachTriggerPolicy.shouldTrigger(
+                        text: event.text,
+                        mode: self.app.brief.mode,
+                        speakerCertain: true,
+                        now: now,
+                        lastTriggeredAt: self.lastCoachTriggeredAt,
+                        lastFingerprint: self.lastCoachFingerprint
+                    ) else { continue }
+                    self.lastCoachTriggeredAt = now
+                    self.lastCoachFingerprint = CoachTriggerPolicy.fingerprint(event.text)
+                    self.app.recordDiagnostic(
+                        kind: .coach,
+                        name: "semantic_trigger",
+                        detail: self.app.brief.mode.rawValue
+                    )
                     let window = await self.bus.window()
                     self.triggerCoach(window: window, latest: event.text, manual: false)
                 }
@@ -857,10 +982,9 @@ final class SessionCoordinator {
 
     private func scheduleSummaryAfterFinal() {
         let thresholdReached = summaryPolicy.registerFinalTurn()
-        if thresholdReached { summaryDebounceTask?.cancel() }
-        guard summaryDebounceTask == nil || thresholdReached else { return }
+        guard thresholdReached, summaryDebounceTask == nil, summaryTask == nil else { return }
         summaryDebounceTask = Task { @MainActor [weak self] in
-            do { try await Task.sleep(for: .seconds(thresholdReached ? 2 : 8)) }
+            do { try await Task.sleep(for: .seconds(2)) }
             catch { return }
             guard let self, !Task.isCancelled else { return }
             self.summaryDebounceTask = nil
@@ -875,10 +999,11 @@ final class SessionCoordinator {
 
     private func runSummary(final: Bool) async {
         let started: ContinuousClock.Instant = .now
-        let window = await bus.window()
-        guard !window.isEmpty else { return }
+        let batch = await bus.turns(since: summaryCursor)
+        guard !batch.turns.isEmpty else { return }
+        let existing = app.minutes
         let summaryJob = Task { [summaryLane] in
-            try await summaryLane.summarize(window: window)
+            try await summaryLane.summarize(existing: existing, newTurns: batch.turns)
         }
         let timeout = Task {
             do { try await Task.sleep(for: .seconds(final ? 8 : 15)) }
@@ -887,18 +1012,21 @@ final class SessionCoordinator {
         }
         defer { timeout.cancel() }
         do {
-            if let bullets = try await summaryJob.value {
-                app.summaryBullets = bullets
+            if let minutes = try await summaryJob.value {
+                app.minutes = minutes
+                app.summaryBullets = minutes.topics.map { "\($0.title): \($0.summary)" }
                 app.summaryBackendError = nil
                 app.recalculateRuntimeHealth()
-                summaryPolicy.markSummarized()
+                summaryPolicy.markSummarized(turnCount: batch.cursor)
+                summaryCursor = batch.cursor
+                app.persistLiveSnapshot()
                 let elapsed = Self.milliseconds(since: started)
                 app.recordDiagnostic(
                     kind: .summary,
                     name: final ? "final_completed" : "updated",
                     durationMs: elapsed
                 )
-                log.info("Resumo atualizado (\(bullets.count, privacy: .public) itens)")
+                log.info("Ata atualizada (\(minutes.topics.count, privacy: .public) assuntos)")
             }
         } catch {
             guard !Task.isCancelled else { return }

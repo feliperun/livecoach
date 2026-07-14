@@ -15,9 +15,40 @@ struct CoachingPane: View {
                 BackendErrorBanner(error: error)
             }
 
+            if !app.coachCards.filter(\.hasContent).isEmpty {
+                HStack(spacing: 7) {
+                    Button(action: app.showPreviousCoach) { Image(systemName: "chevron.left") }
+                    if let position = app.activeCoachPosition {
+                        Text("\(position.index)/\(position.count)")
+                            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                    Button(action: app.showNextCoach) { Image(systemName: "chevron.right") }
+                    Spacer()
+                    Picker("Coach", selection: Binding(
+                        get: { app.coachModel },
+                        set: { app.coachModel = $0 }
+                    )) {
+                        ForEach(CoachModel.allCases) { Text($0.label).tag($0) }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .controlSize(.mini)
+                    Button(action: app.dismissActiveCoach) { Image(systemName: "xmark") }
+                        .help("Ocultar dica")
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
+            }
+
             Group {
                 if let latest {
-                    HeroCard(card: latest, convLang: app.brief.conversationLang, keyterms: app.brief.keyterms)
+                    HeroCard(
+                        card: latest,
+                        convLang: app.brief.conversationLang,
+                        keyterms: app.brief.keyterms + app.generatedContextKeyterms
+                    )
                         .transition(.opacity.combined(with: .scale(scale: 0.97)))
                 } else {
                     EmptyCoachHint(
@@ -29,7 +60,7 @@ struct CoachingPane: View {
             }
             .padding(12)
             .frame(maxHeight: .infinity, alignment: .top)
-            .animation(.spring(duration: 0.35), value: latest?.id)
+            .animation(.snappy(duration: 0.24), value: latest?.id)
         }
     }
 }
@@ -114,9 +145,8 @@ private struct HeroCard: View {
         }
         .padding(13)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(accent.opacity(0.45), lineWidth: 1.5))
-        .shadow(color: accent.opacity(0.14), radius: 10, y: 3)
+        .background(Theme.panelRaised, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(accent.opacity(0.32)))
     }
 
     /// Realça a frase (língua da conversa) — termos-chave/nomes/números destacam.
@@ -195,7 +225,8 @@ private struct EmptyCoachHint: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassPanel()
+        .background(Theme.panelRaised, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.divider))
     }
 }
 
