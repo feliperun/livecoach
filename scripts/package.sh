@@ -20,7 +20,16 @@ BUILD_ARGS=(
 )
 if [ -n "${VERSION}" ]; then BUILD_ARGS+=("MARKETING_VERSION=${VERSION}"); fi
 if [ "${CUEME_ADHOC_SIGN:-0}" = "1" ]; then
-  BUILD_ARGS+=(DEVELOPMENT_TEAM= CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=YES)
+  # Hardened Runtime enforces library validation. With ad hoc signatures the
+  # app and embedded Sparkle binaries have no shared Team ID, so dyld refuses
+  # to load Sparkle even though `codesign --verify` succeeds. Developer ID
+  # builds keep Hardened Runtime enabled through the project setting.
+  BUILD_ARGS+=(
+    DEVELOPMENT_TEAM=
+    CODE_SIGN_IDENTITY=-
+    CODE_SIGNING_REQUIRED=YES
+    ENABLE_HARDENED_RUNTIME=NO
+  )
 elif [ -n "${CUEME_SIGNING_IDENTITY:-}" ]; then
   BUILD_ARGS+=(
     CODE_SIGN_STYLE=Manual
