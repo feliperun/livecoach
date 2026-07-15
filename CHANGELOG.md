@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.10.0](https://github.com/feliperun/cueme/compare/v0.9.1...v0.10.0) (2026-07-15)
+
+
+### Features
+
+* add adaptive live meeting experience ([09291b0](https://github.com/feliperun/cueme/commit/09291b03c4397d39734523ac9cc31749147912d9))
+* import meeting audio and search session memory ([e81f4df](https://github.com/feliperun/cueme/commit/e81f4df8aec30ee83b3336484a525516bc09825a))
+* import meeting audio and search session memory ([5577b22](https://github.com/feliperun/cueme/commit/5577b228698ff8e5a1f8ec4718daef9c31c57def))
+
 ## [0.9.1](https://github.com/feliperun/cueme/compare/v0.9.0...v0.9.1) (2026-07-14)
 
 
