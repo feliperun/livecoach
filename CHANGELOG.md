@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.15.0](https://github.com/feliperun/cueme/compare/v0.14.0...v0.15.0) (2026-07-15)
+## [1.0.0](https://github.com/feliperun/cueme/compare/v0.14.0...v1.0.0) (2026-07-15)
 
 
 ### ⚠ BREAKING CHANGES
