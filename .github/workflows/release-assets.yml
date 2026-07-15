@@ -25,6 +25,12 @@ jobs:
         with:
           ref: ${{ env.TAG }}
 
+      - name: Require stable release signing identity
+        if: ${{ env.HAS_DEVELOPER_ID != 'true' }}
+        run: |
+          echo "::error::Developer ID secrets are required. Ad-hoc updates invalidate macOS TCC permissions."
+          exit 1
+
       - name: Resolve version
         run: echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
 

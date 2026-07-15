@@ -155,20 +155,14 @@ final class SessionCoordinator {
         // Coaching reage ao barramento (fim de turno do interlocutor).
         tasks.append(consumeBusForCoaching())
 
-        // Captura de áudio → roteia para o transcritor da origem.
+        let capturePlan = ScreenCapturePermissionProbe.sessionPlan
+        app.permissionDiagnosis = capturePlan.diagnosis
+
+        // Start the recorder and consumers before capture. ScreenCaptureKit can
+        // take time to initialize; microphone audio must never be dropped while
+        // the optional system channel is coming up.
         let capture = AudioCapture()
         self.capture = capture
-        do {
-            try await capture.start(
-                includeSystem: true,
-                echoCancellation: app.echoCancellation,
-                captureOwnProcess: app.trainingMode   // capta o TTS do entrevistador como `other`
-            )
-        } catch {
-            await failStart(error.localizedDescription)
-            return
-        }
-        app.systemCaptureActive = capture.isSystemActive
         tasks.append(consumeCaptureEvents(from: capture))
         tasks.append(routeAudio(from: capture))
 
@@ -186,6 +180,18 @@ final class SessionCoordinator {
                 log.error("Falha ao iniciar gravação: \(error.localizedDescription, privacy: .public)")
             }
         }
+
+        do {
+            try await capture.start(
+                includeSystem: capturePlan.includeSystemAudio,
+                echoCancellation: app.echoCancellation,
+                captureOwnProcess: app.trainingMode   // capta o TTS do entrevistador como `other`
+            )
+        } catch {
+            await failStart(error.localizedDescription)
+            return
+        }
+        app.systemCaptureActive = capture.isSystemActive
 
         tasks.append(runWatchdog())
 
@@ -487,7 +493,13 @@ final class SessionCoordinator {
         }
     }
 
-    func repairSystemCapture() async {
+    func repairSystemCapture(openSettingsIfNeeded: Bool = true) async {
+        let plan = ScreenCapturePermissionProbe.sessionPlan
+        guard plan.includeSystemAudio else {
+            app.permissionDiagnosis = plan.diagnosis
+            if openSettingsIfNeeded { app.openScreenRecordingSettings() }
+            return
+        }
         await capture?.restartSystemCapture()
     }
 
@@ -522,7 +534,7 @@ final class SessionCoordinator {
         case .restartSystemCapture:
             app.setRuntimeHealth(.degraded, reason: "Recuperando áudio da chamada")
             app.recordDiagnostic(kind: .recovery, name: "system_watchdog_restart", speaker: .other)
-            await repairSystemCapture()
+            await repairSystemCapture(openSettingsIfNeeded: false)
         case .restartSTT(let speaker):
             app.setRuntimeHealth(.degraded, reason: "Recuperando transcrição")
             app.recordDiagnostic(kind: .recovery, name: "stt_restarted", speaker: speaker)

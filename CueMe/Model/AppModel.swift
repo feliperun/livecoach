@@ -416,6 +416,9 @@ final class AppModel {
 
     private func beginUITestLiveSession() {
         let now = Date()
+        let systemCaptureDenied = ProcessInfo.processInfo.environment[
+            "CUEME_UI_TEST_SYSTEM_CAPTURE_DENIED"
+        ] == "1"
         let questionID = UUID(uuidString: "60000000-0000-0000-0000-000000000001")!
         let coachID = UUID(uuidString: "60000000-0000-0000-0000-000000000002")!
         transcript = [
@@ -433,7 +436,9 @@ final class AppModel {
         currentSessionID = UUID(uuidString: "60000000-0000-0000-0000-000000000003")!
         sessionState = .running
         micCaptureState = .active
-        systemCaptureState = .active
+        systemCaptureState = systemCaptureDenied ? .unavailable : .active
+        systemCaptureActive = !systemCaptureDenied
+        permissionDiagnosis = systemCaptureDenied ? .notGranted : .ready
         micLevel = 0.65
         systemLevel = 0.55
         coachBackendReady = true
@@ -612,6 +617,7 @@ final class AppModel {
 
     private func runAudioPreflight() async {
         let preflightGranted = ScreenCapturePermissionProbe.isGranted
+        let permissionGranted = preflightGranted || ScreenCapturePermissionProbe.requestAccess()
         guard await AudioCapture.requestMicPermission() else {
             preflight[.microphone] = .failed
             preflight[.systemAudio] = .failed
@@ -619,7 +625,7 @@ final class AppModel {
         }
         let capture = AudioCapture()
         do {
-            try await capture.start(includeSystem: true)
+            try await capture.start(includeSystem: permissionGranted)
         } catch {
             preflight[.microphone] = .failed
             preflight[.systemAudio] = .failed

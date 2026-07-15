@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreGraphics
 import ScreenCaptureKit
 import OSLog
 
@@ -188,6 +189,9 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
 
     private func startSystem() async throws {
         if isSystemActive { return }
+        guard CGPreflightScreenCaptureAccess() else {
+            throw CaptureError.screenCapturePermissionDenied
+        }
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
         guard let display = content.displays.first else {
             throw CaptureError.noDisplay
@@ -302,11 +306,14 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
     enum CaptureError: LocalizedError {
         case noMicFormat
         case noDisplay
+        case screenCapturePermissionDenied
 
         var errorDescription: String? {
             switch self {
             case .noMicFormat: return "Formato de microfone indisponível."
             case .noDisplay: return "Nenhum display disponível para captura de áudio de sistema."
+            case .screenCapturePermissionDenied:
+                return "Permissão de Tela e Áudio do Sistema não concedida para esta cópia do CueMe."
             }
         }
     }

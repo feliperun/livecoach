@@ -29,12 +29,14 @@ struct HeaderBar: View {
             if app.isRunning || app.sessionState == .preparing {
                 ChannelHealthButton(
                     icon: "mic.fill",
+                    identifier: "capture.microphone",
                     state: app.micCaptureState,
                     level: app.micLevel,
                     repair: app.repairMicrophone
                 )
                 ChannelHealthButton(
                     icon: "headphones",
+                    identifier: "capture.system",
                     state: app.systemCaptureState,
                     level: app.systemLevel,
                     repair: app.repairSystemCapture
@@ -161,6 +163,7 @@ struct CaptureHealthAlert: View {
                 .background(issue.color.opacity(0.12), in: Capsule())
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("capture.alert")
             .padding(.horizontal, 12)
             .padding(.bottom, 4)
         }
@@ -190,6 +193,7 @@ struct CaptureHealthAlert: View {
 
 private struct ChannelHealthButton: View {
     let icon: String
+    let identifier: String
     let state: CaptureChannelState
     let level: Float
     let repair: () -> Void
@@ -210,7 +214,19 @@ private struct ChannelHealthButton: View {
             .background(color.opacity(0.11), in: Capsule())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+        .accessibilityValue(accessibilityValue)
         .help(help)
+    }
+
+    private var accessibilityValue: String {
+        switch state {
+        case .waiting: return "waiting"
+        case .active: return "active"
+        case .silent: return "silent"
+        case .recovering: return "recovering"
+        case .unavailable: return "unavailable"
+        }
     }
 
     private var color: Color {

@@ -2,9 +2,10 @@ import XCTest
 
 @MainActor
 final class CueMeMemoryE2ETests: XCTestCase {
-    private func launchApp() -> XCUIApplication {
+    private func launchApp(environment: [String: String] = [:]) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["CUEME_UI_TESTING"] = "1"
+        for (key, value) in environment { app.launchEnvironment[key] = value }
         app.launch()
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 8))
         return app
@@ -117,6 +118,31 @@ final class CueMeMemoryE2ETests: XCTestCase {
         let savedNote = app.textFields["memory.note"]
         XCTAssertTrue(savedNote.waitForExistence(timeout: 3))
         XCTAssertEqual(savedNote.value as? String, "Validar entrega final")
+    }
+
+    func testSessionRecordsMicrophoneWhenSystemCapturePermissionIsUnavailable() {
+        continueAfterFailure = false
+        let app = launchApp(environment: ["CUEME_UI_TEST_SYSTEM_CAPTURE_DENIED": "1"])
+        defer { app.terminate() }
+
+        let primary = app.buttons["session.primary"]
+        XCTAssertTrue(primary.waitForExistence(timeout: 5))
+        primary.click()
+        XCTAssertEqual(primary.label, "Parar")
+
+        let microphone = app.buttons["capture.microphone"]
+        XCTAssertTrue(microphone.waitForExistence(timeout: 3))
+        XCTAssertEqual(microphone.value as? String, "active")
+        let system = app.buttons["capture.system"]
+        XCTAssertTrue(system.exists)
+        XCTAssertEqual(system.value as? String, "unavailable")
+        let alert = app.buttons["capture.alert"]
+        XCTAssertTrue(alert.exists)
+        XCTAssertTrue(alert.label.contains("ÁUDIO EXTERNO OFF"))
+
+        primary.click()
+        XCTAssertTrue(app.staticTexts["Biblioteca"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Áudio local"].exists)
     }
 
     func testLiveCoachSuggestionSurvivesIntoSessionHistory() {

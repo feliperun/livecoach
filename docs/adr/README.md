@@ -76,3 +76,4 @@ proposed → active → superseded
 | [0027](0027-supported-external-audio-ingress.md) | Supported external audio ingress | active |
 | [0028](0028-evidence-first-longitudinal-semantic-memory.md) | Evidence-first longitudinal memory with hybrid SQLite search | active |
 | [0029](0029-key-feature-e2e-regression-gate.md) | Key-feature E2E regression gate | active |
+| [0030](0030-stable-release-identity-for-tcc.md) | Stable release identity for persistent macOS permissions | active |

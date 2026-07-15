@@ -10,11 +10,11 @@ CueMe uses **macOS 26** frameworks (`SpeechAnalyzer`, `Translation`,
 compile the app and run XCTest with an ad-hoc-signed test host, alongside the
 Sentrux gates.
 
-Developer ID signing/notarization activates when its repository secrets are
-configured; otherwise it produces an ad-hoc signed early-access build.
-Ad-hoc packages disable Hardened Runtime because the app and embedded Sparkle
-binaries do not share a Developer ID Team ID in that mode. Developer ID builds
-retain Hardened Runtime and follow the notarization path below.
+The release workflow requires Developer ID signing/notarization repository
+secrets. It fails closed when they are missing: an ad-hoc update changes the
+app's designated requirement and invalidates macOS TCC grants for microphone
+and Screen & System Audio Recording. Ad-hoc packaging remains available only
+for disposable local/CI builds.
 
 ## Build a `.dmg` locally
 
@@ -45,8 +45,9 @@ The project uses **automatic signing** with your **Apple Development** identity
   xcrun stapler staple dist/CueMe-<v>.dmg
   ```
 
-Without the paid program, ship the `.dmg` as-is and document the right-click-Open
-step — normal for early open-source macOS apps.
+Without the paid program, use that `.dmg` only for local development. Do not
+publish it as a Sparkle update: every ad-hoc build has a different designated
+requirement and macOS will invalidate the user's privacy grants.
 
 ## Releases
 
@@ -62,5 +63,5 @@ update's EdDSA signature.
 - [x] Category + copyright in Info.plist
 - [x] Hardened runtime + mic / network entitlements
 - [x] Stable signing (`DEVELOPMENT_TEAM`)
-- [ ] Developer ID + notarization (needs the paid program) — optional for OSS
+- [ ] Developer ID + notarization secrets — required before the next published update
 - [x] Attach the `.dmg`, checksum, and signed appcast to the GitHub Release
