@@ -220,7 +220,7 @@ final class CueMeMemoryE2ETests: XCTestCase {
         let renderedText = readingView.value as? String ?? ""
         XCTAssertTrue(renderedText.contains("Aprendizados"))
         XCTAssertTrue(renderedText.contains("Coragem também é memória disponível na hora certa."))
-        XCTAssertTrue(app.staticTexts["Mapa da minha jornada"].exists)
+        XCTAssertTrue(app.buttons["note.rename"].label.contains("Mapa da minha jornada"))
     }
 
     func testSavedSessionReceivesASignificantGeneratedTitle() {
