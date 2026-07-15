@@ -99,6 +99,7 @@ struct SessionWorkspaceHeader: View {
                                 }
                             }
                             .buttonStyle(.bordered).controlSize(.small)
+                            .accessibilityIdentifier("note.label.\(label)")
                         }
                     }
                 }

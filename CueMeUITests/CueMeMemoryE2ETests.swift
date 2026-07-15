@@ -48,7 +48,9 @@ final class CueMeMemoryE2ETests: XCTestCase {
         ask.click()
         let answer = app.staticTexts["memory.answer"]
         XCTAssertTrue(answer.waitForExistence(timeout: 5))
-        let rawAnswer = answer.value as? String ?? ""
+        let rawAnswer = [answer.value as? String, answer.label]
+            .compactMap { $0 }
+            .joined(separator: " ")
         XCTAssertTrue(rawAnswer.contains("[S1]"))
         XCTAssertTrue(rawAnswer.contains("Estratégia de frota elétrica"))
     }
@@ -206,7 +208,7 @@ final class CueMeMemoryE2ETests: XCTestCase {
         label.click()
         label.typeText("crescimento")
         app.buttons["note.label.add"].click()
-        XCTAssertTrue(app.staticTexts["crescimento"].exists)
+        XCTAssertTrue(app.buttons["note.label.crescimento"].waitForExistence(timeout: 3))
 
         app.buttons["note.editor.preview"].click()
         XCTAssertTrue(app.staticTexts["Aprendizados"].waitForExistence(timeout: 3))
@@ -224,7 +226,9 @@ final class CueMeMemoryE2ETests: XCTestCase {
         primary.click()
         primary.click()
 
-        XCTAssertTrue(app.staticTexts["Plano de mitigação da entrega"].waitForExistence(timeout: 5))
+        let title = app.buttons["note.rename"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertTrue(title.label.contains("Plano de mitigação da entrega"))
     }
 
     func testThemePreferenceCanBePinnedFromTheMainWindow() {
@@ -232,10 +236,10 @@ final class CueMeMemoryE2ETests: XCTestCase {
         let app = launchApp()
         defer { app.terminate() }
 
-        let theme = app.buttons["theme.preference"]
+        let theme = app.menuButtons["theme.preference"]
         XCTAssertTrue(theme.waitForExistence(timeout: 5))
         theme.click()
-        let light = app.buttons["theme.light"]
+        let light = app.menuItems["Claro"]
         XCTAssertTrue(light.waitForExistence(timeout: 3))
         light.click()
         XCTAssertEqual(theme.value as? String, "light")

@@ -16,6 +16,12 @@ extension AppModel {
 
     func reloadWorkspaceFromDisk() {
         guard !isSessionBusy else { return }
+        // App activation can race with `.task { delegate.connect(app) }` during
+        // UI tests. Never replace the deterministic in-memory corpus with the
+        // intentionally empty temporary archive used by the test process.
+        if ProcessInfo.processInfo.environment["CUEME_UI_TESTING"] == "1" {
+            return
+        }
         projects = ProjectWorkspaceStore.loadAll()
         history = SessionStore.loadAll()
         if let selectedSessionID, !history.contains(where: { $0.id == selectedSessionID }) {
