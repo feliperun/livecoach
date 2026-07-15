@@ -66,7 +66,7 @@ proposed → active → superseded
 | [0017](0017-fast-coach-two-speed.md) | Two-speed Fast Coach with an instant local cue | superseded by 0023 |
 | [0018](0018-glanceable-runtime-and-signed-updates.md) | Glanceable runtime and signed updates | active |
 | [0019](0019-reliability-watchdog-and-provider-failover.md) | Runtime watchdog, provider failover, and post-session quality | active |
-| [0020](0020-session-memory-workspace-and-portable-archive.md) | Session memory workspace and portable human-readable archive | active |
+| [0020](0020-session-memory-workspace-and-portable-archive.md) | Session memory workspace and portable human-readable archive | superseded by 0031 |
 | [0021](0021-portable-high-quality-meeting-audio.md) | Portable high-quality meeting audio | active |
 | [0022](0022-optional-deepgram-streaming-stt.md) | Optional Deepgram streaming STT | active |
 | [0023](0023-adaptive-coach-and-incremental-minutes.md) | Adaptive coach and incremental meeting minutes | superseded by 0025 |
@@ -77,3 +77,6 @@ proposed → active → superseded
 | [0028](0028-evidence-first-longitudinal-semantic-memory.md) | Evidence-first longitudinal memory with hybrid SQLite search | active |
 | [0029](0029-key-feature-e2e-regression-gate.md) | Key-feature E2E regression gate | active |
 | [0030](0030-stable-release-identity-for-tcc.md) | Stable release identity for persistent macOS permissions | active |
+| [0031](0031-file-first-memory-note-corpus.md) | File-first Memory Note corpus | active |
+| [0032](0032-second-brain-writing-workspace.md) | Second Brain writing workspace | active |
+| [0033](0033-explicit-personal-memory-for-live-coach.md) | Explicit personal memory for the live Coach | active |

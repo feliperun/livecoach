@@ -49,6 +49,7 @@ final class SessionPostProcessorTests: XCTestCase {
     func testParseReviewBuildsMinutesActionsDecisionsAndOpenQuestions() {
         let output = """
         {
+          "title": "Migração gradual da plataforma",
           "overview": "O time alinhou a entrega em etapas.",
           "topics": [{"title":"Migração","summary":"Execução gradual com rollback."}],
           "decisions": ["Usar implantação em etapas"],
@@ -60,6 +61,7 @@ final class SessionPostProcessorTests: XCTestCase {
 
         let parsed = SessionReviewParser.parseReview(output, preserving: .empty)
 
+        XCTAssertEqual(parsed?.title, "Migração gradual da plataforma")
         XCTAssertEqual(parsed?.minutes.overview, "O time alinhou a entrega em etapas.")
         XCTAssertEqual(parsed?.minutes.topics.first?.title, "Migração")
         XCTAssertEqual(parsed?.takeaways.first?.text, "Felipe prepara o plano até sexta")

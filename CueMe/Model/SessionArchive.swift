@@ -10,7 +10,8 @@ enum SessionArchive {
     }
 
     static func markdown(for record: SessionRecord) -> String {
-        var lines = [
+        var lines = NoteDocument.frontmatter(for: record) + [
+            "",
             "# \(record.title)",
             "",
             "- Data: \(record.startedAt.formatted(date: .long, time: .shortened))",
@@ -20,7 +21,8 @@ enum SessionArchive {
             "- Idioma: \(record.conversationLang)",
             ""
         ]
-        if let projectID = record.projectID { lines.insert("- Projeto ID: \(projectID.uuidString)", at: 6) }
+        lines += NoteDocument.userBodyLines(for: record)
+        lines.append("")
         appendSummary(record, to: &lines)
         appendTakeaways(record, to: &lines)
         appendReview(record, to: &lines)
@@ -200,14 +202,12 @@ enum SessionStore {
     }
 
     static func archiveDirectory(for record: SessionRecord) -> URL {
-        rootURL.appendingPathComponent(record.archiveFolderName, isDirectory: true)
+        rootURL.appendingPathComponent(record.storageRelativePath, isDirectory: true)
     }
 
     static func prepareSession(id: UUID, startedAt: Date) -> URL? {
-        let directory = rootURL.appendingPathComponent(
-            SessionArchive.folderName(startedAt: startedAt, id: id),
-            isDirectory: true
-        )
+        let directory = rootURL.appendingPathComponent("_Inbox", isDirectory: true)
+            .appendingPathComponent(SessionArchive.folderName(startedAt: startedAt, id: id), isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             return directory
@@ -223,8 +223,19 @@ enum SessionStore {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let data = try encoder.encode(record)
             try data.write(to: directory.appendingPathComponent("session.json"), options: .atomic)
-            try SessionArchive.markdown(for: record)
-                .write(to: directory.appendingPathComponent("session.md"), atomically: true, encoding: .utf8)
+            let markdown = SessionArchive.markdown(for: record)
+            try markdown.write(
+                to: directory.appendingPathComponent(NoteDocument.filename),
+                atomically: true,
+                encoding: .utf8
+            )
+            // Compatibility mirror for pre-1.0 automations. `note.md` is the
+            // canonical document and the only Markdown read back by CueMe.
+            try markdown.write(
+                to: directory.appendingPathComponent("session.md"),
+                atomically: true,
+                encoding: .utf8
+            )
             return directory
         } catch {
             return nil
@@ -253,16 +264,74 @@ enum SessionStore {
         }
     }
 
-    private static func loadArchive() -> [SessionRecord] {
-        guard let folders = try? FileManager.default.contentsOfDirectory(
-            at: rootURL,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
-        return folders.compactMap { folder in
-            let url = folder.appendingPathComponent("session.json")
-            return try? decoder.decode(SessionRecord.self, from: Data(contentsOf: url))
+    /// Moves the complete note folder, including recordings and attachments,
+    /// without persisting any absolute path. The project directory itself is a
+    /// user-readable filesystem object with its own Markdown descriptor.
+    static func relocate(_ value: SessionRecord, to project: KnowledgeProject?) -> SessionRecord? {
+        var record = value
+        let source = archiveDirectory(for: record)
+        let parentRelative = ProjectWorkspaceStore.relativeDirectory(for: project)
+        let relative = "\(parentRelative)/\(record.archiveFolderName)"
+        let destination = rootURL.appendingPathComponent(relative, isDirectory: true)
+        do {
+            if let project { _ = ProjectWorkspaceStore.save(project) }
+            try FileManager.default.createDirectory(
+                at: destination.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            if source.standardizedFileURL != destination.standardizedFileURL,
+               FileManager.default.fileExists(atPath: source.path) {
+                if FileManager.default.fileExists(atPath: destination.path) {
+                    try FileManager.default.removeItem(at: destination)
+                }
+                try FileManager.default.moveItem(at: source, to: destination)
+            }
+            record.projectID = project?.id
+            record.relativeFolderPath = relative
+            record.modifiedAt = Date()
+            return save(record) == nil ? nil : record
+        } catch {
+            return nil
         }
+    }
+
+    /// One-time, idempotent layout migration for archives created before 1.0.
+    /// Existing top-level session folders become Note folders inside `_Inbox`
+    /// or their linked Project. The document contents are never rewritten into
+    /// the database; `note.md` remains the canonical, user-owned source.
+    static func migrateToWorkspace(
+        _ records: [SessionRecord],
+        projects: [KnowledgeProject]
+    ) -> [SessionRecord] {
+        let projectsByID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
+        return records.map { record in
+            let project = record.projectID.flatMap { projectsByID[$0] }
+            let desired = "\(ProjectWorkspaceStore.relativeDirectory(for: project))/\(record.archiveFolderName)"
+            guard record.storageRelativePath != desired else { return record }
+            return relocate(record, to: project) ?? record
+        }
+        .sorted { $0.startedAt > $1.startedAt }
+    }
+
+    private static func loadArchive() -> [SessionRecord] {
+        guard let enumerator = FileManager.default.enumerator(
+            at: rootURL,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else { return [] }
+        var records: [SessionRecord] = []
+        for case let url as URL in enumerator where url.lastPathComponent == "session.json" {
+            guard var record = try? decoder.decode(SessionRecord.self, from: Data(contentsOf: url)) else { continue }
+            let folder = url.deletingLastPathComponent()
+            let relative = folder.path.replacingOccurrences(of: rootURL.path + "/", with: "")
+            if !relative.isEmpty, relative != folder.path { record.relativeFolderPath = relative }
+            record = NoteDocument.mergeCanonicalFields(
+                from: folder.appendingPathComponent(NoteDocument.filename),
+                into: record
+            )
+            records.append(record)
+        }
+        return records
     }
 
     private static func loadLegacy() -> [SessionRecord] {

@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SessionSidebar: View {
     @Environment(AppModel.self) private var app
+    @State private var showCreateProject = false
+    @State private var newProjectName = ""
 
     var body: some View {
         @Bindable var app = app
@@ -36,9 +38,11 @@ struct SessionSidebar: View {
             .padding(.top, 12)
 
             liveButton
+            writeButton
             importButton
 
             if !app.sidebarCollapsed {
+                libraryNavigation
                 historyControls
                 HStack {
                     Text(app.historySearch.isEmpty ? "RECENTES" : "RESULTADOS")
@@ -92,6 +96,121 @@ struct SessionSidebar: View {
         .frame(width: app.sidebarCollapsed ? 58 : 268)
         .background(Theme.sidebar)
         .animation(.snappy(duration: 0.24), value: app.sidebarCollapsed)
+    }
+
+    private var writeButton: some View {
+        Button { _ = app.createMemoryNote(kind: .note) } label: {
+            Group {
+                if app.sidebarCollapsed {
+                    Image(systemName: "square.and.pencil").frame(width: 32, height: 28)
+                } else {
+                    Label("Escrever", systemImage: "square.and.pencil")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 10).frame(height: 30)
+                }
+            }
+            .font(.system(size: 10.5, weight: .semibold))
+            .foregroundStyle(Theme.violet)
+            .background(Theme.violet.opacity(0.10), in: RoundedRectangle(cornerRadius: 9))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("sidebar.new-note")
+        .padding(.horizontal, app.sidebarCollapsed ? 8 : 10)
+    }
+
+    private var libraryNavigation: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text("ORGANIZAR").font(.system(size: 9, weight: .bold)).tracking(0.9).foregroundStyle(.tertiary)
+                Spacer()
+                if app.libraryProjectFilterID != nil || app.libraryLabelFilter != nil {
+                    Button("Limpar") {
+                        app.libraryProjectFilterID = nil
+                        app.libraryLabelFilter = nil
+                    }
+                    .buttonStyle(.plain).font(.system(size: 9, weight: .semibold)).foregroundStyle(Theme.violet)
+                }
+                Button { showCreateProject = true } label: {
+                    Image(systemName: "folder.badge.plus")
+                }
+                .buttonStyle(.plain).foregroundStyle(Theme.violet)
+                .help("Novo projeto")
+                .popover(isPresented: $showCreateProject) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Novo projeto").font(.headline)
+                        Text("Uma pasta soberana para um contexto contínuo.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        TextField("Nome do projeto", text: $newProjectName)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit(createProject)
+                        Button("Criar", action: createProject)
+                            .buttonStyle(.borderedProminent)
+                    }
+                    .padding(14).frame(width: 280)
+                }
+                Button { app.reloadWorkspaceFromDisk() } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.plain).foregroundStyle(.secondary)
+                .help("Recarregar arquivos")
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 5) {
+                    libraryChip(
+                        "Todas",
+                        icon: "books.vertical",
+                        selected: app.libraryProjectFilterID == nil && app.libraryLabelFilter == nil
+                    ) {
+                        app.libraryProjectFilterID = nil
+                        app.libraryLabelFilter = nil
+                    }
+                    ForEach(app.projects.filter { !$0.archived }) { project in
+                        libraryChip(
+                            project.name,
+                            icon: "folder.fill",
+                            selected: app.libraryProjectFilterID == project.id
+                        ) {
+                            app.libraryProjectFilterID = project.id
+                            app.libraryLabelFilter = nil
+                        }
+                    }
+                }
+            }
+            if !app.allLabels.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 5) {
+                        ForEach(app.allLabels, id: \.self) { label in
+                            libraryChip(
+                                label,
+                                icon: "tag.fill",
+                                selected: app.libraryLabelFilter == label
+                            ) {
+                                app.libraryLabelFilter = label
+                                app.libraryProjectFilterID = nil
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 11)
+    }
+
+    private func libraryChip(
+        _ title: String,
+        icon: String,
+        selected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 9.5, weight: .semibold)).lineLimit(1)
+                .padding(.horizontal, 8).frame(height: 24)
+                .foregroundStyle(selected ? Theme.violet : Color.secondary)
+                .background(selected ? Theme.violet.opacity(0.13) : Theme.interactive, in: Capsule())
+                .overlay(Capsule().strokeBorder(selected ? Theme.violet.opacity(0.35) : Theme.divider))
+        }
+        .buttonStyle(.plain)
     }
 
     private var importButton: some View {
@@ -262,7 +381,7 @@ struct SessionSidebar: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(record.title).lineLimit(1)
                         .font(.system(size: 11.5, weight: .semibold))
-                    Text(snippet ?? record.startedAt.formatted(date: .abbreviated, time: .shortened))
+                    Text(snippet ?? secondaryLine(record))
                         .lineLimit(1)
                         .font(.system(size: 9.5)).foregroundStyle(.secondary)
                 }
@@ -296,11 +415,22 @@ struct SessionSidebar: View {
     }
 
     private func sessionIcon(_ record: SessionRecord) -> String {
-        switch record.origin {
-        case .audioFile: return "waveform.badge.plus"
-        case .voiceMemo: return "mic.fill"
-        case .live: return record.hasAudio ? "waveform" : "doc.text"
-        }
+        record.noteKind.icon
+    }
+
+    private func secondaryLine(_ record: SessionRecord) -> String {
+        if !record.labels.isEmpty { return record.labels.prefix(2).map { "#\($0)" }.joined(separator: "  ") }
+        if let project = app.project(for: record) { return project.name }
+        return record.startedAt.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    private func createProject() {
+        guard let id = app.createProject(named: newProjectName) else { return }
+        app.activeProjectID = id
+        app.libraryProjectFilterID = id
+        app.libraryLabelFilter = nil
+        newProjectName = ""
+        showCreateProject = false
     }
 }
 

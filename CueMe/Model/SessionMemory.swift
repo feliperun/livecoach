@@ -123,6 +123,7 @@ struct MeetingReview: Codable, Sendable, Hashable {
 }
 
 struct SessionReviewExtraction: Sendable, Equatable {
+    var title: String?
     var minutes: MeetingMinutes
     var takeaways: [SessionTakeaway]
     var review: MeetingReview

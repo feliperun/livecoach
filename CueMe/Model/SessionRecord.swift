@@ -4,6 +4,7 @@ enum SessionOrigin: String, Codable, CaseIterable, Sendable, Identifiable {
     case live
     case audioFile
     case voiceMemo
+    case written
 
     var id: String { rawValue }
     var supportsLiveCoach: Bool { self == .live }
@@ -13,14 +14,16 @@ enum SessionOrigin: String, Codable, CaseIterable, Sendable, Identifiable {
         case .live: return "Ao vivo"
         case .audioFile: return "Áudio importado"
         case .voiceMemo: return "Voice Memo"
+        case .written: return "Escrita"
         }
     }
 }
 
-/// Snapshot de uma sessão terminada (treino ou conversa real), para o histórico.
-struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
-    static let currentSchemaVersion = 3
-    static func == (l: SessionRecord, r: SessionRecord) -> Bool { l.id == r.id }
+/// The canonical domain entity. Session-specific fields are optional enrichment
+/// around a user-owned Markdown note rather than the product's primary object.
+struct MemoryNote: Codable, Identifiable, Sendable, Hashable {
+    static let currentSchemaVersion = 4
+    static func == (l: MemoryNote, r: MemoryNote) -> Bool { l.id == r.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
     let id: UUID
@@ -54,6 +57,13 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
     var artifacts: [SessionArtifact]
     var projectID: UUID?
     var personIDs: [UUID]
+    var noteKind: MemoryNoteKind
+    var markdownBody: String
+    var labels: [String]
+    var attachments: [NoteAttachment]
+    var titleSource: NoteTitleSource
+    var modifiedAt: Date
+    var relativeFolderPath: String?
 
     init(
         id: UUID = UUID(),
@@ -86,7 +96,14 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         review: MeetingReview = .empty,
         artifacts: [SessionArtifact] = [],
         projectID: UUID? = nil,
-        personIDs: [UUID] = []
+        personIDs: [UUID] = [],
+        noteKind: MemoryNoteKind? = nil,
+        markdownBody: String = "",
+        labels: [String] = [],
+        attachments: [NoteAttachment] = [],
+        titleSource: NoteTitleSource? = nil,
+        modifiedAt: Date? = nil,
+        relativeFolderPath: String? = nil
     ) {
         self.id = id
         self.schemaVersion = schemaVersion
@@ -110,7 +127,8 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         self.audioDuration = audioDuration
         self.diagnostics = diagnostics
         self.coachFeedback = coachFeedback
-        self.archiveFolderName = archiveFolderName ?? SessionArchive.folderName(startedAt: startedAt, id: id)
+        let resolvedFolderName = archiveFolderName ?? SessionArchive.folderName(startedAt: startedAt, id: id)
+        self.archiveFolderName = resolvedFolderName
         self.notes = notes
         self.takeaways = takeaways
         self.origin = origin
@@ -119,6 +137,13 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         self.artifacts = artifacts
         self.projectID = projectID
         self.personIDs = personIDs
+        self.noteKind = noteKind ?? MemoryNoteKind.inferred(mode: mode, origin: origin)
+        self.markdownBody = markdownBody
+        self.labels = Self.normalizedLabels(labels)
+        self.attachments = attachments
+        self.titleSource = titleSource ?? (displayTitle == nil ? .fallback : .generated)
+        self.modifiedAt = modifiedAt ?? endedAt
+        self.relativeFolderPath = relativeFolderPath ?? "_Inbox/\(resolvedFolderName)"
     }
 
     /// Decode tolerante: sessões salvas antes do gravador não têm hasAudio/audioDuration.
@@ -158,6 +183,15 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         artifacts = try c.decodeIfPresent([SessionArtifact].self, forKey: .artifacts) ?? []
         projectID = try c.decodeIfPresent(UUID.self, forKey: .projectID)
         personIDs = try c.decodeIfPresent([UUID].self, forKey: .personIDs) ?? []
+        noteKind = try c.decodeIfPresent(MemoryNoteKind.self, forKey: .noteKind)
+            ?? MemoryNoteKind.inferred(mode: mode, origin: origin)
+        markdownBody = try c.decodeIfPresent(String.self, forKey: .markdownBody) ?? ""
+        labels = Self.normalizedLabels(try c.decodeIfPresent([String].self, forKey: .labels) ?? [])
+        attachments = try c.decodeIfPresent([NoteAttachment].self, forKey: .attachments) ?? []
+        titleSource = try c.decodeIfPresent(NoteTitleSource.self, forKey: .titleSource)
+            ?? (displayTitle == nil ? .fallback : .generated)
+        modifiedAt = try c.decodeIfPresent(Date.self, forKey: .modifiedAt) ?? endedAt
+        relativeFolderPath = try c.decodeIfPresent(String.self, forKey: .relativeFolderPath)
     }
 
     var duration: TimeInterval { max(0, endedAt.timeIntervalSince(startedAt)) }
@@ -172,6 +206,58 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
             return String(q.prefix(80))
         }
         return training ? "Treino · \(mode.label)" : mode.label
+    }
+
+    var storageRelativePath: String {
+        guard let relativeFolderPath,
+              !relativeFolderPath.hasPrefix("/"),
+              !relativeFolderPath.split(separator: "/").contains("..") else {
+            return archiveFolderName
+        }
+        return relativeFolderPath
+    }
+
+    var containsRecording: Bool {
+        hasAudio || attachments.contains { $0.kind == .recording || $0.kind == .audio }
+    }
+
+    mutating func rename(to rawTitle: String) {
+        let clean = Self.cleanTitle(rawTitle)
+        guard !clean.isEmpty else { return }
+        displayTitle = clean
+        titleSource = .user
+        modifiedAt = Date()
+    }
+
+    mutating func applyGeneratedTitle(_ rawTitle: String) {
+        guard titleSource != .user else { return }
+        let clean = Self.cleanTitle(rawTitle)
+        guard !clean.isEmpty else { return }
+        displayTitle = clean
+        titleSource = .generated
+        modifiedAt = Date()
+    }
+
+    mutating func setLabels(_ values: [String]) {
+        labels = Self.normalizedLabels(values)
+        modifiedAt = Date()
+    }
+
+    private static func cleanTitle(_ value: String) -> String {
+        var clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.hasPrefix("#") {
+            clean = clean.drop(while: { $0 == "#" || $0.isWhitespace })
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        clean = clean.trimmingCharacters(in: CharacterSet(charactersIn: "\"“”"))
+        return String(clean.prefix(120))
+    }
+
+    private static func normalizedLabels(_ values: [String]) -> [String] {
+        Array(Set(values.compactMap { value -> String? in
+            let clean = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return clean.isEmpty ? nil : String(clean.prefix(48))
+        })).sorted()
     }
 
     var turnCount: Int { transcript.filter { $0.isFinal }.count }
@@ -198,3 +284,7 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         return s
     }
 }
+
+/// Source compatibility while older capture and review modules migrate their
+/// vocabulary. New product code should use `MemoryNote`.
+typealias SessionRecord = MemoryNote

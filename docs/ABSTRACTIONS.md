@@ -40,17 +40,19 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 6. **State** (`Model/AppModel`) — the single `@Observable` source of truth the
    UI reads. `SessionCoordinator` pushes into it; it never reaches back into the
    coordinator except through the command methods (`start()`, `stop()`, `ask()`).
-7. **Persistence** (`SessionRecord`, `SessionArchive`/`SessionStore`,
-   `Audio/MeetingRecording`) — snapshots a session into one portable directory:
-   typed JSON, mandatory human-readable Markdown and synchronized audio. Notes,
-   takeaways and generated artifacts rewrite both state representations.
+7. **Persistence** (`MemoryNote`, `NoteDocument`, `ProjectWorkspaceStore`,
+   `SessionArchive`/`SessionStore`, `Audio/MeetingRecording`) — every written or
+   recorded experience is one portable Note directory. Canonical `note.md`
+   frontmatter/body and canonical `project.md` folder metadata are user-owned;
+   `session.json` preserves lossless transcript/Coach/minutes state and audio is
+   stored beside it. `SessionRecord` remains only a source-compatibility alias.
    `SessionOrigin` records whether memory came from live capture, an audio file
    or a Voice Memos share; imported sources never persist their original absolute
    path. Public external handoffs converge on an atomic `ExternalAudioInbox`.
    `SemanticMemoryIndex` is a derived projection only: relational metadata,
    FTS5 and sqlite-vec vectors can be rebuilt from portable records. Projects,
    people and evidence references use stable UUIDs.
-8. **Views** (`Views/`) — SwiftUI only. Reads `AppModel`/`SessionRecord`, calls
+8. **Views** (`Views/`) — SwiftUI only. Reads `AppModel`/`MemoryNote`, calls
    `AppModel` command methods, never touches `SessionCoordinator` or the audio
    layer directly.
 
@@ -71,7 +73,9 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 | Imported audio | `AudioImportService` + `PrerecordedAudioTranscriber` | Read-only source; normalized M4A; native file STT or Deepgram batch. |
 | External audio handoff | `CueMeShare` + `ImportMeetingAudioIntent` + `ExternalAudioInbox` | Audio-only Share Extension, Shortcuts, document-open and drop; no private Voice Memos scan. |
 | CV import | `PDFKit` in `BriefEditor` | Extracts text from a pasted/imported résumé. |
-| Persistence | `FileManager` + `JSONEncoder`/`Decoder` in `SessionStore`/`BriefStore`/`MeetingContextStore` | User-selectable session archive; briefs, reusable contexts and glossary cache in Application Support. |
+| Canonical personal corpus | `FileManager` + Markdown/frontmatter in `NoteDocument`, `ProjectWorkspaceStore`, `SessionStore` | User-selectable root; Project folders and Note folders remain readable without CueMe. |
+| Derived knowledge index | SQLite3 + FTS5 + sqlite-vec in `SemanticMemoryIndex` | Local, rebuildable exact and semantic projection; never the source of truth. |
+| App configuration | `JSONEncoder`/`Decoder` in `BriefStore`/`MeetingContextStore` | Briefs, reusable contexts, people and glossary cache in Application Support. |
 | Packaging | `xcodebuild` + `hdiutil` in `scripts/package.sh` | Local only — see [Getting Started](GETTING-STARTED.md) and [Packaging](PACKAGING.md). |
 
 ## Contracts & invariants
@@ -84,11 +88,14 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 - **STT providers preserve one session per capture origin.** Native and Deepgram
   must emit the same `TranscriptEvent` contract; switching providers cannot
   introduce diarization or merge mic/system audio.
-- **The coach's only source of truth is the brief + selected contexts + CV.** The
+- **The coach's only source of truth is the brief + selected contexts + CV + the
+  explicitly enabled relevant-memory snapshot.** The
   system prompt explicitly forbids using ambient CLI context; never weaken this
   when editing `Prompts.coachSystem` ([ADR 0008](adr/0008-coach-ux-and-context-safety.md)).
-  Context documents are user-authored and explicit; ambient CLI context remains
-  forbidden. `Mode.isPassive` means the coach is never constructed or
+  Context documents and Memory Notes are user-authored. `RelevantMemoryContextBuilder`
+  may add at most five semantically ranked Notes in a bounded snapshot only when
+  the user toggle is on; ambient CLI context remains forbidden. `Mode.isPassive`
+  means the coach is never constructed or
   triggered at all — see `SessionCoordinator.buildBrain`/`consumeBusForCoaching`.
 - **Coach output is always the 4-line card format or the literal string `NADA`.**
   `CoachCardParser` depends on the exact labels (`GUIA:`/`DIGA:`/`PT:`/`KEY:`); a
@@ -124,18 +131,28 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
   and reciprocal-rank fusion combines them after date/type filtering. The legacy
   in-memory scorer remains a fallback. Selecting Deepgram affects transcription,
   not search.
+- **`MemoryNote` is the base entity.** Written pages, journal entries, meetings,
+  interviews, sales calls, recording-only sessions and imported audio differ by
+  `MemoryNoteKind` and optional enrichments; do not introduce a parallel durable
+  note/session hierarchy.
+- **The filesystem is authoritative.** `note.md` owns user-facing metadata and
+  body, `project.md` owns Project metadata, and relative folder placement owns
+  containment. External edits are merged on load/reactivation. SQLite and vectors
+  may be deleted and rebuilt without data loss.
+- **A user rename wins forever.** `NoteTitleSource.user` prevents asynchronous or
+  repeated LLM title generation from replacing a deliberate title.
 - **A session is never silently healthy.** Mic and system channel states are
   independent; digital-zero mic data and an interrupted `SCStream` must be
   surfaced and repaired or remain visibly unavailable ([ADR 0014](adr/0014-per-channel-capture-health.md)).
   `LiveHealthMonitor` also derives recording, STT, Coach and summary status from
   existing runtime state; it does not own or duplicate recovery.
-- **Recordings are located by a portable session directory name, never by an
-  absolute stored path.** `SessionRecord.archiveFolderName` combines timestamp
+- **Recordings are located by a portable Note directory name, never by an
+  absolute stored path.** `MemoryNote.archiveFolderName` combines timestamp
   and short UUID; `MeetingRecording` resolves it against the current archive root
   and falls back to the legacy UUID directory.
-- **Markdown mirrors durable session state.** Any saved mutation to notes,
-  review, takeaways, summary or generated artifacts goes through `SessionStore.save`,
-  which rewrites `session.json` and `session.md` together.
+- **Markdown is not a mirror.** Any saved mutation goes through `SessionStore.save`,
+  which rewrites canonical `note.md`, structured `session.json`, and the legacy
+  `session.md` compatibility export. Reads merge `note.md` over JSON.
 - **`ClaudeSession` always spawns from an isolated empty cwd with hooks
   disabled.** This is the containment boundary against the CLI leaking the
   *user's own* project context into the coach's output.

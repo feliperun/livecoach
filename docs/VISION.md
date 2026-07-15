@@ -1,82 +1,93 @@
 # CueMe — Product Vision
 
-> The "why", not the "how". Short and opinionated.
+> Your life, available when you need it.
 
 ## Why this, why now
 
-Meetings disappear from memory as soon as the next task starts. During demanding
-conversations, attention is already exhausted by listening, thinking and looking
-at the other person; taking useful notes or composing a strong answer adds more
-load. CueMe records and organizes the meeting locally, then adds its differentiator:
-a coach that can whisper the next useful move live and reason over the saved event
-afterward.
+People already produce the raw material of a remarkable personal memory: notes,
+meetings, interviews, decisions, voice memos and the thoughts that appear between
+them. The material is fragmented across tools and usually becomes inert. A note
+app waits for perfect discipline; a meeting recorder remembers only the meeting;
+an AI assistant knows the current prompt but not the life behind it.
+
+CueMe is a **personal second brain that is present while life happens**. It makes
+writing pleasurable, turns audio into structured memory, and can bring a small,
+relevant part of that memory back during a demanding conversation.
 
 ## The problem
 
-Under pressure you lose the thread: you miss the exact question, your foreign
-vocabulary evaporates, and your answer comes out long and unfocused. Generic
-prep doesn't help in the moment; existing tools are web apps that need audio
-drivers, cloud STT, and API keys, and they dump walls of text you can't read
-while talking.
+- Valuable experiences disappear because capturing and organizing them costs
+  attention at exactly the wrong time.
+- Notes are easy to create and hard to consume later, so they become a graveyard.
+- Meeting tools produce isolated transcripts instead of a continuous personal
+  history.
+- Under pressure—especially in interviews—people cannot retrieve all the examples,
+  confidence and hard-earned context they already possess.
+- Hosted knowledge tools can lock the user into a database, pricing model or cloud
+  policy they do not control.
 
-## The insight
+## The product
 
-Capturing the two sides as **separate audio sources** (your mic vs. system
-audio) makes "who spoke" free — no diarization. And the assistant should read
-like a **friend beside you**: one line of guidance, one ready-to-say phrase,
-its translation, a couple of key words. Terse beats thorough when you're live.
+The base object is a **Memory Note**. It can be a written page, journal entry,
+meeting, interview, sales call, imported voice memo, or any combination of text,
+recording, transcript, Coach cards, decisions, actions and attachments.
+
+Projects are folders. Notes are folders. The note itself is Markdown with
+frontmatter. Audio and attachments live beside it. Those files are the source of
+truth; SQLite, FTS5, embeddings and sqlite-vec are disposable indexes that make
+the files fast and intelligent.
+
+Recording, transcription, summaries and Coach are not a separate product bolted
+onto the library. They are **accelerators for making a durable note**:
+
+- write an idea or journal entry in a beautiful Markdown workspace;
+- record a thought before it disappears;
+- capture both sides of a conversation and preserve the evidence;
+- let the selected LLM name and structure the memory;
+- connect it to projects and cross-cutting labels;
+- retrieve related memories semantically;
+- opt in to using those real memories as grounded context for the live Coach.
 
 ## Principles
 
-- **Local-first.** On-device STT and translation remain the default; the default
-  LLM runs through the user's own Claude Code CLI. Keyed DeepSeek coaching and
-  Deepgram STT are explicit opt-ins.
-- **Latency is a feature.** Prewarm sessions, keep translation off the LLM,
-  scan in two seconds. If it's not fast, it's useless mid-sentence.
-- **Truth from the brief only.** Coaching never fabricates the user's history —
-  facts come from the session brief and the pasted CV, or it offers a structure
-  to fill.
-- **Compact and unobtrusive.** A glanceable interface with icons and short actions,
-  not another wall of text competing with the person on screen.
-- **Human-readable memory.** Every meeting remains useful inside the app and as
-  a timestamped Markdown archive the user controls.
+- **The user owns the corpus.** A normal filesystem tree remains useful without
+  CueMe. No database export ritual is required.
+- **Files are truth; indexes are acceleration.** SQLite and vectors may be deleted
+  and rebuilt at any time without losing knowledge.
+- **Capture should be easier than forgetting.** Writing, journaling, audio import
+  and live recording are first-class entry points from the home screen.
+- **Reading is part of writing.** Typography, spacing, light/dark appearance and a
+  calm reading mode should make returning to a note genuinely inviting.
+- **Intelligence preserves provenance.** Generated titles never overwrite a user
+  rename. Decisions and answers link back to evidence. AI enriches the note but
+  does not become its owner.
+- **Memory use is explicit and bounded.** The Coach may receive a small local
+  selection of relevant notes only when the user enables it; ambient CLI context
+  remains forbidden.
+- **Local-first by default.** On-device STT, translation and embeddings remain the
+  defaults. Deepgram and DeepSeek are optional, keyed choices.
+- **Live help must be glanceable.** During a conversation, one specific cue beats
+  a wall of analysis.
+- **Interview confidence matters.** CueMe helps people retrieve their actual
+  experience when pressure, language or timidity makes it temporarily inaccessible.
 
-## Shipped (v0.4.0)
+## What 1.0 means
 
-The near-term horizon from the original draft is done: a single-window macOS
-app that, in a foreign-language mock interview, shows the interviewer's question
-with translation on top, an emoji-cued coach card (guidance + phrase +
-vocabulary) within ~2s, a rolling summary, and a CV-aware brief — usable on
-speakers without headphones. Plus, beyond the original scope: an expert-panel
-coach persona with per-scenario playbooks, a voice training mode that practices
-*and* exercises the full pipeline end-to-end, a free-topic "meeting" mode with
-the coach off, and synced audio recording + a waveform player to revisit any
-past session. See the [ADR index](adr/README.md) for how each of these was
-decided.
+CueMe 1.0 is the point where the library, not the recorder, is the center of the
+product. It includes file-first Memory Notes and Project folders, frontmatter,
+labels, attachments, Markdown editing and reading, meaningful LLM-generated
+titles, user renaming, local hybrid search, system/light/dark themes, explicit
+profiles on home, audio journaling, and opt-in relevant-memory grounding for the
+live Coach—while preserving the existing capture, transcription, translation,
+minutes, interview training, playback, import and reliability features.
 
-## Next horizon
+## Non-goals for 1.0
 
-No fixed roadmap — pick based on real usage. Candidates surfaced during
-development but not yet built: editable/custom playbooks, injecting the training
-interviewer's text directly as `.other` (skipping TTS→STT round-trip) for
-higher-fidelity practice transcripts, and Developer ID notarization for a
-Gatekeeper-clean install once distribution beyond personal use matters.
-
-## Shipped reliability horizon (v0.8 development)
-
-Long-session reliability is now a product feature: per-lane watchdog recovery,
-STT restart without dropping capture, delayed cross-provider failover, adaptive
-coach confidence, reusable profiles, green/amber/red health, permission identity
-diagnosis, per-tip feedback, and post-session coverage/P50/P95/recovery reports.
-The reliability state machine is exercised by a deterministic virtual 60-minute
-soak with injected stalls.
-
-## Non-goals (for now)
-
-- No iOS/Windows/web port — macOS 26 only.
-- No mandatory cloud STT, no cloud translation and no bundled API keys.
-- No voice diarization engine — separation is by capture origin, not voiceprint.
-- No multi-user/team features — this is a single-user local tool.
+- No collaborative team workspace or server-owned account system.
+- No iOS, Windows or web editor; macOS 26 remains the supported platform.
+- No mandatory cloud STT, translation, embeddings or storage.
+- No proprietary document format as the primary corpus.
+- No automatic publishing of private notes to any model or service.
 
 ## Related docs
 

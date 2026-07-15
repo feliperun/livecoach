@@ -15,10 +15,11 @@
   <img src="docs/assets/demo.png" alt="CueMe — real-time conversation copilot for macOS" width="900">
 </p>
 
-Real-time conversation copilot for macOS — a native SwiftUI app that listens to
-both sides of a live conversation, transcribes and translates on the fly,
-summarizes what's been said, and gives you contextual coaching as you speak.
-Built for **mock interviews**, sales calls, and difficult conversations.
+CueMe is a file-first personal second brain for macOS. Write, journal, record a
+thought, or capture both sides of a conversation; CueMe turns each experience
+into a durable Memory Note and can bring related parts of your life back when a
+live conversation demands them. Its real-time Coach remains especially focused
+on **interviews**, sales calls and difficult conversations.
 
 100% native Swift. No webview or virtual audio driver. Claude is keyless by
 default; DeepSeek is an explicit, API-keyed option.
@@ -32,6 +33,25 @@ subscription/login), so there's nothing to configure and no key to leak.
 ---
 
 ## What it does
+
+- **Your files are the product** — every Project is a normal folder and every
+  Memory Note is a folder containing canonical `note.md` frontmatter plus its
+  recordings and attachments. JSON is a compatibility/structured sidecar;
+  SQLite, FTS5, embeddings and sqlite-vec are rebuildable indexes.
+- **Beautiful Markdown writing and reading** — create notes and journal entries
+  directly from home, edit in Markdown, switch to a spacious typographic reading
+  mode, organize with Projects and cross-cutting labels, and attach local files.
+- **A unified memory model** — written notes, live meetings, interviews, sales
+  calls, imported audio and Voice Memos share the same base entity and local
+  hybrid search. Each type has a recognizable icon in the library.
+- **Meaningful titles with human authority** — the selected summary LLM names a
+  saved session from its actual content; users can rename anything, and a later
+  generation never overwrites that choice.
+- **Personal memory in the live Coach (opt-in)** — local semantic search selects
+  a bounded set of relevant notes before the session. Only that snapshot becomes
+  grounded context for the chosen model, and it can be disabled at any time.
+- **Adaptive appearance** — follows the system by default, with explicit light
+  and dark preferences.
 
 - **Captures both sides natively** — your mic (`AVAudioEngine`) + the other
   person's audio from the system (`ScreenCaptureKit`, e.g. Zoom/Meet). Because
@@ -66,7 +86,8 @@ subscription/login), so there's nothing to configure and no key to leak.
   Revisit any past session in the
   **history**: a visual waveform player where tapping a transcript line seeks
   and plays the audio from that moment, and the active line highlights live as
-  it plays back. Every session keeps JSON state plus a human-readable Markdown copy.
+  it plays back. Recording, transcript, Coach and summary enrich the same Note
+  instead of creating a separate information silo.
 
 Example (interview in English, native Portuguese):
 
@@ -185,10 +206,10 @@ CueMe/
 ├── Brain/    ClaudeClient (CLI resolver), ClaudeSession (warm process),
 │             Summary / Coaching lanes, Prompts
 ├── Model/    AppModel (@Observable), SessionCoordinator, SessionBrief,
-│             SessionRecord (history persistence), Types
-└── Views/    RootView, HeaderBar, QuestionBanner, CoachingPane, MeetingPanel,
-              Transcript, Summary, BriefEditor, HistoryView,
-              WaveformPlayerView, Highlighter (NaturalLanguage), Theme
+│             MemoryNote, NoteDocument, ProjectWorkspaceStore,
+│             SemanticMemoryIndex, RelevantMemoryContextBuilder, Types
+└── Views/    RootView, SessionSidebar, MemoryNoteEditor, HeaderBar,
+              CoachingPane, SessionWorkspaceView, WaveformPlayerView, Theme
 ```
 
 ---
@@ -208,6 +229,11 @@ and accessibility use.
 - Translation stays on-device. Coach and summary use the selected provider:
   Claude CLI by default, or DeepSeek when explicitly configured. DeepSeek keys
   live in the macOS Keychain.
+- Personal Notes remain local unless **Use relevant memory in Coach** is enabled.
+  When enabled, local sqlite-vec retrieval sends only a bounded snapshot of up to
+  five related Notes to the selected Coach provider for that session.
+- Your Project/Note folders are canonical. The local SQLite database is a
+  rebuildable index and is never uploaded as a knowledge base.
 
 ## License
 

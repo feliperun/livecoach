@@ -36,7 +36,6 @@ struct PreflightView: View {
         .padding(24)
         .frame(width: 380, height: 205)
         .background(Theme.background)
-        .preferredColorScheme(.dark)
         .onAppear { if app.preflight.values.allSatisfy({ $0 == .idle }) { app.runPreflight() } }
     }
 

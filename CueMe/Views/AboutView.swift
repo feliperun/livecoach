@@ -26,7 +26,7 @@ struct AboutView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Text("Copiloto de conversa em tempo real. Ouve os dois lados, traduz na hora e cochicha o que dizer — para entrevistas, vendas e conversas difíceis.")
+            Text("Seu segundo cérebro file-first: escreva, grave e conecte o que vive — com uma memória que também pode ajudar em tempo real.")
                 .font(.system(size: 12.5))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -54,7 +54,7 @@ struct AboutView: View {
             Divider().padding(.horizontal, 24)
 
             VStack(spacing: 3) {
-                Text("Swift nativo · macOS 26 · Claude keyless · DeepSeek opcional")
+                Text("Swift nativo · macOS 26 · Markdown soberano · IA opcional")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.tertiary)
                 Text("MIT · Construído com Swift + Claude Code")
@@ -65,7 +65,6 @@ struct AboutView: View {
         .padding(26)
         .frame(width: 360)
         .background(Theme.background)
-        .preferredColorScheme(.dark)
     }
 }
 

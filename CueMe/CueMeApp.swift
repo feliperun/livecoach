@@ -87,7 +87,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillBecomeActive(_ notification: Notification) {
         guard let app else { return }
-        Task { await app.consumeExternalAudioInbox() }
+        Task {
+            app.reloadWorkspaceFromDisk()
+            await app.consumeExternalAudioInbox()
+        }
     }
 
     func application(_ sender: NSApplication, openFiles filenames: [String]) {

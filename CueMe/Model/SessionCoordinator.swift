@@ -18,6 +18,7 @@ final class SessionCoordinator {
     private var coachingLane = CoachingLane(live: nil, manual: nil)
     private var coachSessions: [any CoachSession] = []
     private var summarySessions: [any CoachSession] = []
+    private var brainBrief: SessionBrief?
 
     private var capture: AudioCapture?
     private var micStt: (any SttSession)?
@@ -98,7 +99,8 @@ final class SessionCoordinator {
             return
         }
 
-        let brief = app.brief
+        let brief = app.liveSessionBrief()
+        brainBrief = brief
 
         // Tradução nativa on-device (só quando a conversa é estrangeira).
         if brief.isForeign {
@@ -249,6 +251,7 @@ final class SessionCoordinator {
         summarySessions.removeAll()
         summaryLane = SummaryLane(session: nil)
         coachingLane = CoachingLane(live: nil, manual: nil)
+        brainBrief = nil
         app.stopTranslation()
         app.systemCaptureActive = false
         app.micCaptureState = .waiting
@@ -377,7 +380,7 @@ final class SessionCoordinator {
     /// Troca o motor ao vivo sem reiniciar captura, STT ou gravação.
     func switchCoachModel(to model: CoachModel) async {
         guard app.isRunning, !app.brief.mode.isPassive else { return }
-        let system = Prompts.coachSystem(brief: app.brief)
+        let system = Prompts.coachSystem(brief: brainBrief ?? app.brief)
         let live = makeFailoverSession(
             primary: client.makeCoachSession(model: model, system: system),
             selectedModel: model,
@@ -410,7 +413,7 @@ final class SessionCoordinator {
 
     func switchSummaryModel(to model: CoachModel) async {
         guard app.isRunning else { return }
-        let system = Prompts.summarySystem(brief: app.brief)
+        let system = Prompts.summarySystem(brief: brainBrief ?? app.brief)
         let primary = client.makeCoachSession(model: model, system: system)
         let session = makeFailoverSession(primary: primary, selectedModel: model, system: system)
         guard let session else {

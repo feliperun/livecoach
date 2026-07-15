@@ -11,6 +11,10 @@ private func sqlite3_vec_init(
 /// Rebuildable local index. JSON/Markdown remain canonical; SQLite stores
 /// relational metadata, FTS5 BM25 terms and sqlite-vec vectors in one file.
 final class SemanticMemoryIndex: @unchecked Sendable {
+    /// sqlite-vec reports cosine distance (0 = identical, 1 = orthogonal).
+    /// Without a cutoff the nearest chunk is returned even when every chunk is
+    /// unrelated, which makes a one-note archive match every possible query.
+    private static let maximumSemanticDistance = 0.5
     static let shared: SemanticMemoryIndex = {
         guard ProcessInfo.processInfo.environment["CUEME_UI_TESTING"] == "1" else {
             return SemanticMemoryIndex()
@@ -107,12 +111,14 @@ final class SemanticMemoryIndex: @unchecked Sendable {
         guard let db else { return [] }
         let blob = Self.blob(embedder.embedding(for: query))
         var statement: OpaquePointer?
-        let sql = "SELECT rowid FROM memory_vec WHERE embedding MATCH ? ORDER BY distance LIMIT 40"
+        let sql = "SELECT rowid, distance FROM memory_vec WHERE embedding MATCH ? ORDER BY distance LIMIT 40"
         guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
         defer { sqlite3_finalize(statement) }
         _ = blob.withUnsafeBytes { sqlite3_bind_blob(statement, 1, $0.baseAddress, Int32($0.count), transient) }
         var rowIDs: [Int64] = []
         while sqlite3_step(statement) == SQLITE_ROW {
+            let distance = sqlite3_column_double(statement, 1)
+            guard distance <= Self.maximumSemanticDistance else { continue }
             rowIDs.append(sqlite3_column_int64(statement, 0))
         }
         var result: [Candidate] = []

@@ -48,7 +48,9 @@ final class CueMeMemoryE2ETests: XCTestCase {
         ask.click()
         let answer = app.staticTexts["memory.answer"]
         XCTAssertTrue(answer.waitForExistence(timeout: 5))
-        let rawAnswer = answer.value as? String ?? ""
+        let rawAnswer = [answer.value as? String, answer.label]
+            .compactMap { $0 }
+            .joined(separator: " ")
         XCTAssertTrue(rawAnswer.contains("[S1]"))
         XCTAssertTrue(rawAnswer.contains("Estratégia de frota elétrica"))
     }
@@ -161,5 +163,92 @@ final class CueMeMemoryE2ETests: XCTestCase {
         app.buttons["session.tab.coach"].click()
         XCTAssertTrue(app.staticTexts["Explique mitigação e prazo"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Vamos dividir a entrega em marcos semanais."].exists)
+    }
+
+    func testHomeSurfacesProfilesAndSecondBrainEntryPoints() {
+        continueAfterFailure = false
+        let app = launchApp()
+        defer { app.terminate() }
+
+        XCTAssertTrue(app.staticTexts["Sua memória, viva e organizada."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["home.new-note"].exists)
+        XCTAssertTrue(app.buttons["home.journal"].exists)
+        XCTAssertTrue(app.buttons["home.record"].exists)
+        XCTAssertTrue(app.buttons["home.profile.interview"].exists)
+        XCTAssertTrue(app.buttons["home.profile.sales"].exists)
+    }
+
+    func testCreatesRenamesLabelsAndEditsAMarkdownNote() {
+        continueAfterFailure = false
+        let app = launchApp()
+        defer { app.terminate() }
+
+        let newNote = app.buttons["home.new-note"]
+        XCTAssertTrue(newNote.waitForExistence(timeout: 5))
+        newNote.click()
+
+        let rename = app.buttons["note.rename"]
+        XCTAssertTrue(rename.waitForExistence(timeout: 5))
+        rename.click()
+        let title = app.textFields["note.title.input"]
+        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        title.click()
+        title.typeKey("a", modifierFlags: .command)
+        title.typeText("Mapa da minha jornada")
+        app.buttons["note.title.save"].click()
+
+        let editor = app.textViews["note.editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 3))
+        editor.click()
+        editor.typeText("# Aprendizados\n\nCoragem também é memória disponível na hora certa.")
+
+        app.buttons["note.labels"].click()
+        let label = app.textFields["note.label.input"]
+        XCTAssertTrue(label.waitForExistence(timeout: 3))
+        label.click()
+        label.typeText("crescimento")
+        app.buttons["note.label.add"].click()
+        XCTAssertTrue(app.buttons["note.label.crescimento"].waitForExistence(timeout: 3))
+        app.typeKey(.escape, modifierFlags: [])
+
+        let preview = app.buttons["note.editor.preview"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 3))
+        XCTAssertTrue(preview.isHittable)
+        preview.click()
+        let readingView = app.descendants(matching: .any)["note.editor.reading"]
+        XCTAssertTrue(readingView.waitForExistence(timeout: 3))
+        let renderedText = readingView.value as? String ?? ""
+        XCTAssertTrue(renderedText.contains("Aprendizados"))
+        XCTAssertTrue(renderedText.contains("Coragem também é memória disponível na hora certa."))
+        XCTAssertTrue(app.buttons["note.rename"].label.contains("Mapa da minha jornada"))
+    }
+
+    func testSavedSessionReceivesASignificantGeneratedTitle() {
+        continueAfterFailure = false
+        let app = launchApp()
+        defer { app.terminate() }
+
+        let primary = app.buttons["session.primary"]
+        XCTAssertTrue(primary.waitForExistence(timeout: 5))
+        primary.click()
+        primary.click()
+
+        let title = app.buttons["note.rename"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertTrue(title.label.contains("Plano de mitigação da entrega"))
+    }
+
+    func testThemePreferenceCanBePinnedFromTheMainWindow() {
+        continueAfterFailure = false
+        let app = launchApp()
+        defer { app.terminate() }
+
+        let theme = app.menuButtons["theme.preference"]
+        XCTAssertTrue(theme.waitForExistence(timeout: 5))
+        theme.click()
+        let light = app.menuItems["Claro"]
+        XCTAssertTrue(light.waitForExistence(timeout: 3))
+        light.click()
+        XCTAssertEqual(theme.value as? String, "light")
     }
 }

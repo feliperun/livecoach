@@ -12,6 +12,8 @@ final class SemanticMemoryIndexTests: XCTestCase {
             let lower = text.lowercased()
             if lower.contains("carro") || lower.contains("automóvel") || lower.contains("veículo") {
                 values[7] = 1
+            } else if lower.contains("observabilidade") {
+                values[13] = 1
             } else {
                 values[11] = 1
             }
@@ -36,6 +38,27 @@ final class SemanticMemoryIndexTests: XCTestCase {
         let index = SemanticMemoryIndex(embedder: TestEmbedder(), url: url)
         let results = index.search(query: "carro", date: .all, type: .all, records: [record])
         XCTAssertEqual(results.first?.recordID, record.id)
+    }
+
+    func testSQLiteVecDoesNotReturnAnUnrelatedNearestNeighbor() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CueMeSemantic-\(UUID().uuidString).sqlite3")
+        defer {
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: URL(fileURLWithPath: url.path + "-wal"))
+            try? FileManager.default.removeItem(at: URL(fileURLWithPath: url.path + "-shm"))
+        }
+        let record = SessionRecord(
+            startedAt: Date(), mode: .meeting, training: false,
+            conversationLang: "pt-BR", nativeLang: "pt-BR", goal: "",
+            transcript: [], coachCards: [], summaryBullets: [],
+            notes: [.init(timeOffset: 0, text: "O veículo será trocado na próxima semana")]
+        )
+        let index = SemanticMemoryIndex(embedder: TestEmbedder(), url: url)
+
+        let results = index.search(query: "observabilidade", date: .all, type: .all, records: [record])
+
+        XCTAssertTrue(results.isEmpty)
     }
 
     func testLegacyEvidenceFieldsDecodeWithSafeDefaults() throws {

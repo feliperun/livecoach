@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CueMe — real-time conversation copilot for macOS</title>
-<meta name="description" content="Native macOS app that hears both sides, translates on-device, and coaches you on what to say next. Claude keyless by default; DeepSeek optional.">
-<meta property="og:title" content="CueMe — real-time conversation copilot for macOS">
-<meta property="og:description" content="Hears both sides, translates on-device, and whispers what to say next. Claude keyless by default; DeepSeek optional.">
+<title>CueMe — your file-first second brain for macOS</title>
+<meta name="description" content="Write, journal and record life into user-owned Markdown. CueMe connects your memory and can help in real time during interviews and conversations.">
+<meta property="og:title" content="CueMe — your file-first second brain for macOS">
+<meta property="og:description" content="Your life, available when you need it: sovereign Markdown memory plus a live conversation Coach.">
 <meta property="og:image" content="https://feliperun.github.io/cueme/assets/og.png">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
@@ -79,9 +79,9 @@
   </nav>
 
   <header class="hero">
-    <div class="pill">🎧 On-device · Claude keyless · macOS 26</div>
-    <h1>The copilot that <b>whispers what to say next</b>.</h1>
-    <p class="lede">CueMe is a native macOS app that hears both sides of a live conversation, translates on the fly, and coaches you in real time — for interviews, sales calls, and hard talks.</p>
+    <div class="pill">🧠 File-first · Local-first · macOS 26</div>
+    <h1>Your life, <b>available when you need it</b>.</h1>
+    <p class="lede">CueMe is a personal second brain for macOS. Write, journal and record into user-owned Markdown — then retrieve your real experience while life is still happening.</p>
     <div class="cta">
       <a class="btn p" href="https://github.com/feliperun/cueme">⭐ Star on GitHub</a>
       <a class="btn" href="#how">See how it works</a>
@@ -91,31 +91,34 @@
       <div class="sub">The interlocutor's question appears with a translation — then the coach card streams in with what to say and the words you need.</div>
     </div>
     <div class="badges">
-      <span class="b">100% native Swift</span><span class="b">on-device STT &amp; translation</span>
-      <span class="b">Claude Code CLI default</span><span class="b">DeepSeek optional</span><span class="b">MIT</span>
+      <span class="b">user-owned Markdown</span><span class="b">SQLite + sqlite-vec index</span>
+      <span class="b">on-device STT &amp; translation</span><span class="b">Claude/DeepSeek optional</span><span class="b">MIT</span>
     </div>
   </header>
 
   <section id="how">
     <div class="eyebrow">How it works</div>
-    <h2>Two audio sources in, one clear cue out.</h2>
+    <h2>Capture an experience. Keep the memory. Use it later.</h2>
     <div class="flow">
-      <div class="step"><div class="n">01 · CAPTURE</div><h4>Both sides, natively</h4><p>Your mic + the other party's system audio (ScreenCaptureKit). Who spoke is known by origin — no diarization.</p></div>
-      <div class="step"><div class="n">02 · UNDERSTAND</div><h4>On-device speech</h4><p>SpeechAnalyzer transcribes live; Apple's Translation framework renders it in your language in ~100–200ms.</p></div>
-      <div class="step"><div class="n">03 · COACH</div><h4>What to say next</h4><p>A local Claude Code CLI session reads the brief + your CV and streams a terse cue: guidance, a ready phrase, key words.</p></div>
-      <div class="step"><div class="n">04 · GLANCE</div><h4>Read in 2 seconds</h4><p>A compact, always-on-top window beside your call. Emoji-cued, scannable under pressure.</p></div>
+      <div class="step"><div class="n">01 · RECORD</div><h4>Write or capture life</h4><p>Start a Note, journal entry, voice thought or two-sided conversation from the same home.</p></div>
+      <div class="step"><div class="n">02 · OWN</div><h4>Markdown stays yours</h4><p>Projects and Notes are normal folders. Audio and attachments live beside canonical note.md files.</p></div>
+      <div class="step"><div class="n">03 · CONNECT</div><h4>Local semantic memory</h4><p>FTS5, local embeddings and sqlite-vec index the files without replacing them as truth.</p></div>
+      <div class="step"><div class="n">04 · REMEMBER</div><h4>Help in the moment</h4><p>Opt in to giving the live Coach a small, relevant snapshot of your actual past experience.</p></div>
     </div>
   </section>
 
   <section id="features">
     <div class="eyebrow">Features</div>
-    <h2>Built for the moment you're on the spot.</h2>
+    <h2>More than notes. More than a meeting recorder.</h2>
     <div class="grid">
       <div class="card"><div class="ic">🎯</div><h3>Friend-style coach</h3><p>"He asked X → answer like this." Guidance in your language, a ready phrase in theirs, plus the vocabulary you need.</p></div>
+      <div class="card"><div class="ic">✍️</div><h3>Writing worth returning to</h3><p>A spacious Markdown editor, typographic reading mode and adaptive light/dark appearance make memory pleasant to consume.</p></div>
+      <div class="card"><div class="ic">📁</div><h3>Sovereign by design</h3><p>Every Project and Note is a portable filesystem folder with frontmatter, attachments and recordings you control.</p></div>
+      <div class="card"><div class="ic">🧠</div><h3>Longitudinal memory</h3><p>Labels, Projects and hybrid semantic search connect written thoughts, voice notes, meetings and decisions over time.</p></div>
       <div class="card"><div class="ic">🌐</div><h3>Live translation</h3><p>Every line the other person says, translated instantly with the key words bolded for fast scanning.</p></div>
       <div class="card"><div class="ic">📄</div><h3>CV-grounded</h3><p>Paste or import your résumé; the coach points at your real stories instead of making things up.</p></div>
       <div class="card"><div class="ic">🎓</div><h3>Voice training mode</h3><p>A built-in interviewer reads your CV and grills you out loud, adapting to your answers — end-to-end practice.</p></div>
-      <div class="card"><div class="ic">🔒</div><h3>Local-first &amp; explicit</h3><p>Speech and translation run on-device. Claude is keyless by default; DeepSeek is an explicit keyed option.</p></div>
+      <div class="card"><div class="ic">🔒</div><h3>Local-first &amp; explicit</h3><p>Files, search, speech, translation and embeddings stay local by default. Personal memory reaches a Coach provider only when enabled.</p></div>
       <div class="card"><div class="ic">⌨️</div><h3>Out of the way</h3><p>⌥Space to show/hide, a menu-bar control, pin-on-top. It sits beside the call, not in front of it.</p></div>
     </div>
   </section>

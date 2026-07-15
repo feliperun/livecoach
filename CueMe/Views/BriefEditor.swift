@@ -116,6 +116,16 @@ struct BriefEditor: View {
                         }
                     }
                     .disabled(app.isRunning)
+
+                    Toggle(isOn: $app.usePersonalMemoryInCoach) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Usar memória relevante no Coach")
+                            Text("Busca localmente até cinco notas parecidas e envia um recorte ao modelo escolhido só durante a sessão.")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .disabled(app.isRunning || app.brief.mode.isPassive)
                 }
 
                 Section {

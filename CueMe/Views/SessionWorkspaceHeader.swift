@@ -8,17 +8,51 @@ struct SessionWorkspaceHeader: View {
     @State private var otherName = ""
     @State private var showProject = false
     @State private var newProjectName = ""
+    @State private var showRename = false
+    @State private var titleDraft = ""
+    @State private var showLabels = false
+    @State private var labelDraft = ""
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(record.title)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .lineLimit(1)
+                Button {
+                    titleDraft = record.title
+                    showRename = true
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: record.noteKind.icon)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.violet)
+                        Text(record.title)
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                        Image(systemName: "pencil")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("note.rename")
+                .popover(isPresented: $showRename) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Nome da nota").font(.headline)
+                        TextField("Um nome que valha reencontrar", text: $titleDraft)
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityIdentifier("note.title.input")
+                            .onSubmit(saveTitle)
+                        Button("Salvar", action: saveTitle)
+                            .buttonStyle(.borderedProminent)
+                            .accessibilityIdentifier("note.title.save")
+                    }
+                    .padding(14).frame(width: 310)
+                }
                 HStack(spacing: 7) {
-                    Label(record.origin.label, systemImage: record.origin == .live ? "dot.radiowaves.left.and.right" : "square.and.arrow.down")
+                    Text(record.noteKind.label)
                     Label(record.startedAt.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
-                    Label(SessionArchive.clock(record.duration), systemImage: "clock")
+                    if record.origin != .written {
+                        Label(SessionArchive.clock(record.duration), systemImage: "clock")
+                    }
                     if record.hasAudio {
                         Label(audioFormatLabel, systemImage: "waveform")
                             .foregroundStyle(Theme.mint)
@@ -28,15 +62,69 @@ struct SessionWorkspaceHeader: View {
                 .foregroundStyle(.secondary)
             }
             Spacer()
+            labelsButton
             projectButton
-            participantsButton
-            Button(action: app.revealArchive) {
+            if record.origin != .written { participantsButton }
+            Button { app.revealMemoryNote(record.id) } label: {
                 Image(systemName: "folder")
             }
             .buttonStyle(IconButtonStyle())
             .help("Mostrar arquivos da sessão")
         }
         .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
+    }
+
+    private var labelsButton: some View {
+        Button { showLabels.toggle() } label: {
+            Label(record.labels.isEmpty ? "Labels" : "\(record.labels.count)", systemImage: "tag")
+                .font(.system(size: 10, weight: .semibold))
+        }
+        .buttonStyle(.bordered).controlSize(.small)
+        .accessibilityIdentifier("note.labels")
+        .popover(isPresented: $showLabels) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Labels").font(.headline)
+                if record.labels.isEmpty {
+                    Text("Agrupe ideias que atravessam projetos.")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    FlowLayout(spacing: 6) {
+                        ForEach(record.labels, id: \.self) { label in
+                            Button {
+                                app.removeLabel(label, from: record.id)
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Text(label)
+                                    Image(systemName: "xmark")
+                                }
+                            }
+                            .buttonStyle(.bordered).controlSize(.small)
+                            .accessibilityIdentifier("note.label.\(label)")
+                        }
+                    }
+                }
+                HStack {
+                    TextField("ex.: crescimento", text: $labelDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityIdentifier("note.label.input")
+                        .onSubmit(addLabel)
+                    Button("Adicionar", action: addLabel)
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("note.label.add")
+                }
+                if !app.allLabels.isEmpty {
+                    Divider()
+                    Text("JÁ USADAS").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary)
+                    FlowLayout(spacing: 5) {
+                        ForEach(app.allLabels.filter { !record.labels.contains($0) }, id: \.self) { label in
+                            Button(label) { app.addLabel(label, to: record.id) }
+                                .buttonStyle(.plain).font(.caption).foregroundStyle(Theme.violet)
+                        }
+                    }
+                }
+            }
+            .padding(14).frame(width: 300)
+        }
     }
 
     private var projectButton: some View {
@@ -116,5 +204,50 @@ struct SessionWorkspaceHeader: View {
         case "caf": return "CAF · legado"
         default: return "Áudio local"
         }
+    }
+
+    private func saveTitle() {
+        app.renameMemoryNote(record.id, to: titleDraft)
+        showRename = false
+    }
+
+    private func addLabel() {
+        app.addLabel(labelDraft, to: record.id)
+        labelDraft = ""
+    }
+}
+
+private struct FlowLayout: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        layout(proposal: proposal, subviews: subviews).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = layout(proposal: ProposedViewSize(width: bounds.width, height: bounds.height), subviews: subviews)
+        for (index, point) in result.points.enumerated() {
+            subviews[index].place(at: CGPoint(x: bounds.minX + point.x, y: bounds.minY + point.y), proposal: .unspecified)
+        }
+    }
+
+    private func layout(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, points: [CGPoint]) {
+        let width = proposal.width ?? 300
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var points: [CGPoint] = []
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            points.append(CGPoint(x: x, y: y))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return (CGSize(width: width, height: y + rowHeight), points)
     }
 }

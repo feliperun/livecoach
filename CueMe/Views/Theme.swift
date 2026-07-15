@@ -1,13 +1,32 @@
 import SwiftUI
+import AppKit
 
 /// Calm, high-contrast workspace tokens. Static layers keep rendering cheap.
 enum Theme {
-    static let canvas = Color(red: 0.035, green: 0.043, blue: 0.062)
-    static let sidebar = Color(red: 0.046, green: 0.055, blue: 0.078)
-    static let panel = Color(red: 0.065, green: 0.076, blue: 0.104)
-    static let panelRaised = Color(red: 0.082, green: 0.096, blue: 0.130)
-    static let interactive = Color.white.opacity(0.055)
-    static let divider = Color.white.opacity(0.075)
+    static let canvas = adaptive(
+        light: NSColor(srgbRed: 0.965, green: 0.958, blue: 0.945, alpha: 1),
+        dark: NSColor(srgbRed: 0.035, green: 0.043, blue: 0.062, alpha: 1)
+    )
+    static let sidebar = adaptive(
+        light: NSColor(srgbRed: 0.935, green: 0.925, blue: 0.905, alpha: 1),
+        dark: NSColor(srgbRed: 0.046, green: 0.055, blue: 0.078, alpha: 1)
+    )
+    static let panel = adaptive(
+        light: NSColor(srgbRed: 0.992, green: 0.988, blue: 0.978, alpha: 1),
+        dark: NSColor(srgbRed: 0.065, green: 0.076, blue: 0.104, alpha: 1)
+    )
+    static let panelRaised = adaptive(
+        light: NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 1),
+        dark: NSColor(srgbRed: 0.082, green: 0.096, blue: 0.130, alpha: 1)
+    )
+    static let interactive = adaptive(
+        light: NSColor.black.withAlphaComponent(0.045),
+        dark: NSColor.white.withAlphaComponent(0.055)
+    )
+    static let divider = adaptive(
+        light: NSColor.black.withAlphaComponent(0.10),
+        dark: NSColor.white.withAlphaComponent(0.075)
+    )
 
     static let violet = Color(red: 0.48, green: 0.55, blue: 1.0)
     static let cyan = Color(red: 0.32, green: 0.72, blue: 0.98)
@@ -31,9 +50,15 @@ enum Theme {
     )
 
     static let background = LinearGradient(
-        colors: [Color(red: 0.045, green: 0.054, blue: 0.078), canvas],
+        colors: [sidebar.opacity(0.72), canvas],
         startPoint: .topLeading, endPoint: .bottomTrailing
     )
+
+    private static func adaptive(light: NSColor, dark: NSColor) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+        })
+    }
 }
 
 // MARK: - Componentes reutilizáveis

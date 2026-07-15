@@ -97,6 +97,16 @@ CI mirrors this — see `.github/workflows/quality.yml`.
 - **Language:** code, comments, identifiers in **English**.
 - **Surgical changes.** Match existing style; don't refactor unrelated code.
 - **Validate at boundaries.** Don't bypass schema validation with `any`.
+- **`MemoryNote` is the durable base entity.** A recording/session is an enriched
+  Note, not a parallel persistence hierarchy. `SessionRecord` is a compatibility
+  alias only; use the new vocabulary in product code and docs.
+- **Files are authoritative.** `note.md`, `project.md`, relative Project/Note
+  folders, audio and attachments are the user-owned corpus. SQLite/FTS5/sqlite-vec
+  and JSON catalogs are derived indexes or structured sidecars. Never make a
+  database migration the only way to recover user content.
+- **Preserve human authority.** External Markdown edits and explicit user renames
+  win over generated metadata. New AI enrichment must be bounded, attributable
+  and opt-in when it sends personal memory to a provider.
 
 ### Code health gate — Sentrux (mandatory)
 
@@ -155,6 +165,9 @@ After a structural change, update `docs/ARCHITECTURE.md` and/or `docs/ABSTRACTIO
 - **No absolute file paths in exported session JSON.** Audio recordings are
   located by session id at read time (`MeetingRecording.directory(for:)`), never
   stored as a literal path — keeps exports portable across machines/reinstalls.
+- **Do not write only to SQLite.** Every new durable note/project field needs a
+  Markdown/frontmatter representation and a round-trip test proving filesystem
+  edits load back. Search/index tests must also prove the index can be rebuilt.
 
 ---
 
@@ -180,8 +193,10 @@ CueMe/                    App target (see docs/ARCHITECTURE.md for the full brea
   STT/                    On-device speech + translation
   Bus/                    TranscriptBus actor (fan-out + rolling window)
   Brain/                  Claude CLI client/session, prompts, coach/summary lanes
-  Model/                  AppModel, SessionCoordinator, SessionBrief/Record, Types
-  Views/                  SwiftUI (compact window, history, brief editor, About)
+  Model/                  AppModel, MemoryNote, NoteDocument, ProjectWorkspaceStore,
+                          SessionCoordinator, SessionBrief, semantic index, Types
+  Views/                  SwiftUI (Second Brain home/sidebar, Markdown editor,
+                          live workspace, session review, brief editor, About)
   Assets.xcassets/        App icon, accent color
 CueMe.xcodeproj/          Xcode project (synchronized file group — no manual .pbxproj edits for new files)
 CueMeTests/               XCTest regressions (provider, parser, clocks, heuristics)

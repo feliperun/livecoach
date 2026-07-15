@@ -19,6 +19,7 @@ enum SessionReviewParser {
     static func parseReview(_ output: String, preserving existing: MeetingMinutes) -> SessionReviewExtraction? {
         struct Payload: Decodable {
             struct Topic: Decodable { let title: String; let summary: String }
+            let title: String?
             let overview: String; let topics: [Topic]; let decisions: [String]
             let actions: [String]; let openQuestions: [String]; let followUp: String
         }
@@ -43,6 +44,7 @@ enum SessionReviewParser {
         let minutes = MeetingMinutes(overview: clean(payload.overview), topics: topics, updatedAt: Date())
         let review = MeetingReview(decisions: decisions, openQuestions: questions, followUp: clean(payload.followUp))
         guard !minutes.isEmpty || !actions.isEmpty || !review.isEmpty else { return nil }
-        return .init(minutes: minutes, takeaways: actions, review: review)
+        let generatedTitle = payload.title.map(clean).flatMap { $0.isEmpty ? nil : String($0.prefix(120)) }
+        return .init(title: generatedTitle, minutes: minutes, takeaways: actions, review: review)
     }
 }

@@ -27,13 +27,19 @@ Share / Shortcuts / files / drop ─▶ ExternalAudioInbox ─┴─▶ AudioImp
                                                                                                         │
                                                                                           on stop() ────┘
                                                                                                         ▼
-                                                                    SessionRecord → SessionStore (JSON + Markdown + audio)
-                                                                                        │
-                                                                                        ▼
-                                                           SessionSidebar / SessionWorkspaceView (browse + replay + enrich)
+                                                               MemoryNote → SessionStore → Project/Note folders
+                                                                    │        ├─ note.md (canonical)
+                                                                    │        ├─ session.json (structured sidecar)
+                                                                    │        └─ audio + attachments
+                                                                    ▼
+                                              SemanticMemoryIndex (SQLite FTS5 + sqlite-vec, rebuildable)
+                                                                    │
+                                                                    ▼
+                                      SessionSidebar / MemoryNoteEditor / SessionWorkspaceView
 ```
 
-Single Swift process, zero third-party dependencies. Audio callbacks stay
+Single Swift process with Sparkle and vendored sqlite-vec as the only runtime
+dependencies. Audio callbacks stay
 minimal and hand buffers to the async world via `AsyncStream`; shared state
 lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
 
@@ -78,18 +84,21 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
   watchdog recovery, provider failover, latency telemetry, recording and training),
   `TrainingCoordinator` (voice interviewer for practice/e2e testing),
   `HotkeyManager` (global ⌥Space show/hide), `SessionBrief` (+ `BriefStore`),
-  reusable `BriefProfile`s, `SessionRecord` (+ notes, review, takeaways and generated artifacts),
-  `SessionArchive`/`SessionStore` (portable JSON + Markdown history persistence),
+  reusable `BriefProfile`s, `MemoryNote` (the base entity for written and recorded
+  experiences; `SessionRecord` is a migration alias), `NoteDocument` (canonical
+  Markdown/frontmatter), `ProjectWorkspaceStore` (Project folders and `project.md`),
+  `SessionArchive`/`SessionStore` (recursive file-first persistence and migration),
   `ExternalAudioInbox` (atomic App Group handoff shared with the audio-only
   Share Extension), `ImportMeetingAudioIntent` (Shortcuts ingress),
   `SessionKnowledgeIndex` (lexical fallback), `SemanticMemoryIndex` (rebuildable
-  SQLite projection with FTS5/BM25 and sqlite-vec), evidence-linked decisions
+  SQLite projection with FTS5/BM25 and sqlite-vec),
+  `RelevantMemoryContextBuilder` (bounded opt-in Coach snapshot), evidence-linked decisions
   and actions, and stable `KnowledgeProject`/`KnowledgePerson` entities,
   `LiveHealthMonitor`/`SessionIntegrityReport` metadata-only health policies, `Types`.
 - **Views/** — glance-first SwiftUI: `HeaderBar` with live channel meters,
   compact `QuestionBanner`, user-controlled `CoachingPane`, compact live health,
   `MeetingPanel` (passive-mode status when the coach is off), `TranscriptPane`,
-  `SummaryPane`, `BriefEditor`, `SessionSidebar`, `SessionWorkspaceView`
+  `SummaryPane`, `BriefEditor`, `SessionSidebar`, `MemoryNoteEditor`, `SessionWorkspaceView`
   (+ `WaveformPlayerView` and the live transport),
   `AboutView`, `Theme`, and `Highlighter` (on-device `NaturalLanguage` tiering of
   translated lines).
@@ -111,12 +120,40 @@ real exercise of the full capture→STT→translate→coach path, not a mock
 
 ## Persistence & history
 
-Every session is snapshotted on `stop()` into a date/time directory under the
-user-selected archive root. `SessionStore` writes `session.json` and a mandatory
-`session.md`; `MeetingRecorder` writes synchronized `self.m4a` and `other.m4a` in
-the same directory. The JSON stores a portable directory name, never an absolute
-path. `SessionSidebar` keeps history visible and `SessionWorkspaceView` provides
-the same coach/summary/transcript navigation after the event, plus timeline notes,
+The canonical corpus is a normal filesystem tree under the user-selected root:
+
+```text
+<root>/
+├── _Inbox/
+│   └── <note-date-id>/
+│       ├── note.md
+│       ├── session.json
+│       └── attachments/
+└── <project-slug-id>/
+    ├── project.md
+    └── <note-date-id>/
+        ├── note.md
+        ├── session.json
+        ├── self.m4a
+        ├── other.m4a
+        └── attachments/
+```
+
+`note.md` frontmatter and its delimited user body are canonical for title, type,
+labels, Project relationship and written content. `project.md` is canonical
+Project metadata. `session.json` remains a structured sidecar for transcripts,
+Coach cards, evidence, minutes and other lossless machine state; `session.md` is
+written only as a pre-1.0 compatibility mirror. `SessionStore` recursively loads
+the tree, merges canonical Markdown fields over the sidecar, and idempotently
+migrates top-level legacy sessions into `_Inbox` or their Project folder. Reopening
+the app reloads filesystem edits.
+
+On `stop()`, `MeetingRecorder` has already written synchronized `self.m4a` and
+`other.m4a` beside the Note. The sidecar stores only portable relative folder
+identity, never an absolute path. `SessionSidebar` keeps the complete library,
+Project and label filters visible; `MemoryNoteEditor` provides editing/reading;
+`SessionWorkspaceView` preserves the same coach/summary/transcript navigation
+after the event, plus timeline notes,
 takeaways, editable timestamped notes, named participants, auditable transcript
 corrections, editable decisions/open questions/follow-up, integrity diagnostics
 and persisted post-session generation. `recordingStartedAt` anchors
@@ -131,7 +168,7 @@ Apple's private Voice Memos library. The selected STT provider transcribes the
 recording before the normal review lane extracts minutes and actions. The
 sidebar's local hybrid index searches timestamped transcript, topic, decision,
 action, question, note and artifact chunks with date and session-type filters.
-JSON and Markdown remain canonical while SQLite is rebuildable; evidence links
+Files remain canonical while SQLite is rebuildable; evidence links
 seek back to supporting audio, and sessions join project/person timelines
 ([ADR 0026](adr/0026-imported-audio-and-local-knowledge-search.md),
 [ADR 0027](adr/0027-supported-external-audio-ingress.md),
@@ -156,8 +193,9 @@ to Nova-3. Translation remains on-device in either configuration.
   failover and a deterministic virtual 60-minute soak.
 - `CueMeUITests` launches the real macOS app with isolated meeting fixtures and
   a temporary sqlite-vec database. It exercises semantic history search,
-  evidence-backed review navigation and project timelines through the UI without
-  modifying the user's archive.
+  evidence-backed review navigation, Project timelines, capture/recording/Coach,
+  the home/profile surface, Markdown authoring, rename/labels, generated titles
+  and theme selection through the UI without modifying the user's archive.
 - Logging via `OSLog` (`subsystem: "CueMe"`).
 - Releases: `release-please` (Conventional Commits → versioned CHANGELOG + GitHub
   Release on merge); `.dmg` built and attached manually via `scripts/package.sh`
@@ -176,6 +214,11 @@ to Nova-3. Translation remains on-device in either configuration.
 - Selected reusable contexts are local at rest. Their content is sent only to
   the explicitly selected LLM for glossary generation and to the configured
   coach/minutes provider as an explicit session truth source.
+- When **Use relevant memory in Coach** is enabled, local hybrid search selects
+  at most five user-owned Notes and creates a 12,000-character session snapshot.
+  That text is sent to the selected Coach provider as grounded personal memory;
+  disabling the toggle sends none of it. The provider never receives the SQLite
+  database or automatic access to the filesystem.
 - Recorded audio (`.m4a`, with legacy `.caf` playback) is never uploaded as an
   archive — it is written locally and only read back by `MeetingPlayer` for
   in-app playback.

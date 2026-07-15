@@ -32,6 +32,27 @@ frameworks. DeepSeek and Deepgram are optional; their API keys are stored as
 separate Keychain items when selected. First launch prompts for Microphone (required) and, if you want the
 other side of the conversation, Screen & System Audio Recording (optional).
 
+## Your Second Brain folder
+
+Open **Configure session → Archive → Choose folder** to place the corpus anywhere
+you control (including a synced folder). CueMe creates this portable layout:
+
+```text
+_Inbox/<note>/note.md
+<project-folder>/project.md
+<project-folder>/<note>/note.md
+```
+
+Recordings and attachments live beside each `note.md`. Edit those Markdown files
+with another application if you want; CueMe reloads them when it becomes active or
+when you click the refresh button in the library. SQLite is only an index and may
+be deleted and rebuilt.
+
+From home, choose **New Note**, **Journal**, or **Record**. The header of any Note
+renames it, assigns a Project and manages labels. Written Notes open in the Markdown
+editor; recorded Notes also expose review, Coach, summary, transcript and actions.
+Appearance follows macOS until you pin Light or Dark in the top bar.
+
 ## Daily commands
 
 ```bash
