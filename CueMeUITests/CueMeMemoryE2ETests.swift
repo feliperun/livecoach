@@ -162,4 +162,82 @@ final class CueMeMemoryE2ETests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Explique mitigação e prazo"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Vamos dividir a entrega em marcos semanais."].exists)
     }
+
+    func testHomeSurfacesProfilesAndSecondBrainEntryPoints() {
+        continueAfterFailure = false
+        let app = launchApp()
+        defer { app.terminate() }
+
+        XCTAssertTrue(app.staticTexts["Sua memória, viva e organizada."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["home.new-note"].exists)
+        XCTAssertTrue(app.buttons["home.journal"].exists)
+        XCTAssertTrue(app.buttons["home.record"].exists)
+        XCTAssertTrue(app.buttons["home.profile.interview"].exists)
+        XCTAssertTrue(app.buttons["home.profile.sales"].exists)
+    }
+
+    func testCreatesRenamesLabelsAndEditsAMarkdownNote() {
+        continueAfterFailure = false
+        let app = launchApp()
+        defer { app.terminate() }
+
+        let newNote = app.buttons["home.new-note"]
+        XCTAssertTrue(newNote.waitForExistence(timeout: 5))
+        newNote.click()
+
+        let rename = app.buttons["note.rename"]
+        XCTAssertTrue(rename.waitForExistence(timeout: 5))
+        rename.click()
+        let title = app.textFields["note.title.input"]
+        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        title.click()
+        title.typeKey("a", modifierFlags: .command)
+        title.typeText("Mapa da minha jornada")
+        app.buttons["note.title.save"].click()
+
+        let editor = app.textViews["note.editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 3))
+        editor.click()
+        editor.typeText("# Aprendizados\n\nCoragem também é memória disponível na hora certa.")
+
+        app.buttons["note.labels"].click()
+        let label = app.textFields["note.label.input"]
+        XCTAssertTrue(label.waitForExistence(timeout: 3))
+        label.click()
+        label.typeText("crescimento")
+        app.buttons["note.label.add"].click()
+        XCTAssertTrue(app.staticTexts["crescimento"].exists)
+
+        app.buttons["note.editor.preview"].click()
+        XCTAssertTrue(app.staticTexts["Aprendizados"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Coragem também é memória disponível na hora certa."].exists)
+        XCTAssertTrue(app.staticTexts["Mapa da minha jornada"].exists)
+    }
+
+    func testSavedSessionReceivesASignificantGeneratedTitle() {
+        continueAfterFailure = false
+        let app = launchApp()
+        defer { app.terminate() }
+
+        let primary = app.buttons["session.primary"]
+        XCTAssertTrue(primary.waitForExistence(timeout: 5))
+        primary.click()
+        primary.click()
+
+        XCTAssertTrue(app.staticTexts["Plano de mitigação da entrega"].waitForExistence(timeout: 5))
+    }
+
+    func testThemePreferenceCanBePinnedFromTheMainWindow() {
+        continueAfterFailure = false
+        let app = launchApp()
+        defer { app.terminate() }
+
+        let theme = app.buttons["theme.preference"]
+        XCTAssertTrue(theme.waitForExistence(timeout: 5))
+        theme.click()
+        let light = app.buttons["theme.light"]
+        XCTAssertTrue(light.waitForExistence(timeout: 3))
+        light.click()
+        XCTAssertEqual(theme.value as? String, "light")
+    }
 }

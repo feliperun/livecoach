@@ -85,6 +85,24 @@ struct HeaderBar: View {
             }
 
             Menu {
+                ForEach(AppThemePreference.allCases) { preference in
+                    Button {
+                        app.themePreference = preference
+                    } label: {
+                        Label(preference.label, systemImage: preference.icon)
+                    }
+                    .accessibilityIdentifier("theme.\(preference.rawValue)")
+                }
+            } label: {
+                Image(systemName: app.themePreference.icon)
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 28)
+            .accessibilityIdentifier("theme.preference")
+            .accessibilityValue(app.themePreference.rawValue)
+            .help("Aparência: \(app.themePreference.label)")
+
+            Menu {
                 Toggle("Sempre no topo", isOn: $app.pinned)
                 Toggle("Modo treino", isOn: $app.trainingMode)
                     .disabled(app.isSessionBusy || app.brief.mode.isPassive)

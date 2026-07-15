@@ -76,12 +76,17 @@ extension AppModel {
         }
         let project = KnowledgeProject(name: name)
         projects.append(project)
+        _ = ProjectWorkspaceStore.save(project)
         try? KnowledgeEntityStore.save(projects: projects, people: people)
         return project.id
     }
 
     func assignProject(_ projectID: UUID?, to sessionID: UUID) {
-        mutateRecord(sessionID) { $0.projectID = projectID }
+        guard let record = history.first(where: { $0.id == sessionID }) else { return }
+        let project = projectID.flatMap { id in projects.first { $0.id == id } }
+        if let moved = SessionStore.relocate(record, to: project) {
+            replaceHistoryRecord(moved)
+        }
     }
 
     func project(for record: SessionRecord) -> KnowledgeProject? {
@@ -250,6 +255,13 @@ extension AppModel {
         NSWorkspace.shared.activateFileViewerSelecting([SessionStore.rootURL])
     }
 
+    func revealMemoryNote(_ id: UUID) {
+        guard let note = history.first(where: { $0.id == id }) else { return }
+        let directory = SessionStore.archiveDirectory(for: note)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        NSWorkspace.shared.activateFileViewerSelecting([directory])
+    }
+
     func generateSummary(for sessionID: UUID) async {
         await generateArtifact(
             for: sessionID,
@@ -345,6 +357,9 @@ extension AppModel {
                 switch kind {
                 case .review:
                     if var extraction = SessionReviewParser.parseReview(output, preserving: updated.minutes) {
+                        if let generatedTitle = extraction.title {
+                            updated.applyGeneratedTitle(generatedTitle)
+                        }
                         extraction.review.decisions = extraction.review.decisions.map {
                             enriched($0, record: updated)
                         }
@@ -385,9 +400,10 @@ extension AppModel {
         history.sort { $0.startedAt > $1.startedAt }
     }
 
-    private func mutateRecord(_ id: UUID, mutation: (inout SessionRecord) -> Void) {
+    func mutateRecord(_ id: UUID, mutation: (inout SessionRecord) -> Void) {
         guard let index = history.firstIndex(where: { $0.id == id }) else { return }
         mutation(&history[index])
+        history[index].modifiedAt = Date()
         SessionStore.save(history[index])
     }
 

@@ -83,7 +83,7 @@ enum SessionPostProcessor {
         case .review:
             format = """
             Responda SOMENTE JSON válido no formato:
-            {"overview":"um parágrafo","topics":[{"title":"Assunto","summary":"mini resumo"}],"decisions":["decisão confirmada"],"actions":["ação pendente com responsável/prazo somente quando explícitos"],"openQuestions":["questão não resolvida"],"followUp":"próximo contato recomendado"}.
+            {"title":"título específico de 3 a 9 palavras","overview":"um parágrafo","topics":[{"title":"Assunto","summary":"mini resumo"}],"decisions":["decisão confirmada"],"actions":["ação pendente com responsável/prazo somente quando explícitos"],"openQuestions":["questão não resolvida"],"followUp":"próximo contato recomendado"}.
             Use no máximo 12 assuntos e separe rigorosamente decisão, ação e dúvida.
             """
         case .summary:

@@ -2,17 +2,24 @@ import SwiftUI
 
 struct SessionWorkspaceView: View {
     let record: SessionRecord
-    @State private var tab: SessionWorkspaceTab = .review
+    @State private var tab: SessionWorkspaceTab
     @State private var player = MeetingPlayer()
     @State private var envelope: [Float] = []
     @State private var loadingWaveform = false
+
+    init(record: SessionRecord) {
+        self.record = record
+        _tab = State(initialValue: record.origin == .written ? .note : .review)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 0) {
                 SessionWorkspaceHeader(record: record)
-                WaveformPlayerView(player: player, envelope: envelope, loading: loadingWaveform)
-                    .padding(.horizontal, 16).padding(.bottom, 10)
+                if record.containsRecording {
+                    WaveformPlayerView(player: player, envelope: envelope, loading: loadingWaveform)
+                        .padding(.horizontal, 16).padding(.bottom, 10)
+                }
                 SessionWorkspaceTabs(record: record, selection: $tab)
             }
             .background(Theme.sidebar)

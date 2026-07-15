@@ -49,7 +49,6 @@ struct HistoryView: View {
             }
         }
         .frame(width: 560, height: 640)
-        .preferredColorScheme(.dark)
     }
 }
 

@@ -64,7 +64,7 @@ struct CameraRailView: View {
         .padding(.vertical, 10)
         .frame(width: 560, height: 74)
         .background(Theme.background.opacity(0.96))
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(app.themePreference.colorScheme)
     }
 
     private var healthColor: Color {

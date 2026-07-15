@@ -21,6 +21,17 @@ enum Mode: String, Codable, CaseIterable, Sendable, Identifiable {
         }
     }
 
+    var icon: String {
+        switch self {
+        case .interview: return "person.crop.rectangle.stack.fill"
+        case .sales: return "chart.line.uptrend.xyaxis.circle.fill"
+        case .difficult: return "heart.text.square.fill"
+        case .meeting: return "person.3.fill"
+        case .recording: return "waveform.circle.fill"
+        case .custom: return "slider.horizontal.3"
+        }
+    }
+
     /// Captura/transcrição pura. Reuniões normais mantêm um coach pouco intrusivo.
     var isPassive: Bool { self == .recording }
 }
@@ -97,6 +108,9 @@ struct SessionBrief: Codable, Sendable, Equatable {
     var keyterms: [String]
     var cv: String?                // currículo completo (modo entrevista) — opcional
     var contexts: [MeetingContext]? = nil // snapshots dos contextos ativos desta sessão
+    /// Snapshot bounded and explicitly enabled for this live session only.
+    /// It is derived from user-owned Note files and never becomes canonical data.
+    var relevantMemoryContext: String? = nil
 
     static let `default` = SessionBrief(
         mode: .interview,

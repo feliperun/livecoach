@@ -27,12 +27,14 @@ enum HistoryDateFilter: String, CaseIterable, Sendable, Identifiable {
 }
 
 enum HistoryTypeFilter: String, CaseIterable, Sendable, Identifiable {
-    case all, live, imported, voiceMemo, interview, meeting, recording
+    case all, note, journal, live, imported, voiceMemo, interview, meeting, recording
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .all: return "Todos os tipos"
+        case .note: return "Notas"
+        case .journal: return "Diário"
         case .live: return "Sessões ao vivo"
         case .imported: return "Áudios importados"
         case .voiceMemo: return "Voice Memos"
@@ -45,12 +47,14 @@ enum HistoryTypeFilter: String, CaseIterable, Sendable, Identifiable {
     func matches(_ record: SessionRecord) -> Bool {
         switch self {
         case .all: return true
+        case .note: return record.noteKind == .note
+        case .journal: return record.noteKind == .journal
         case .live: return record.origin == .live
-        case .imported: return record.origin != .live
+        case .imported: return record.origin == .audioFile || record.origin == .voiceMemo
         case .voiceMemo: return record.origin == .voiceMemo
-        case .interview: return record.mode == .interview
-        case .meeting: return record.mode == .meeting
-        case .recording: return record.mode == .recording
+        case .interview: return record.noteKind == .interview
+        case .meeting: return record.noteKind == .meeting
+        case .recording: return record.noteKind == .recording
         }
     }
 }
@@ -73,6 +77,7 @@ struct SessionKnowledgeIndex: Sendable {
         let startedAt: Date
         let origin: SessionOrigin
         let mode: Mode
+        let noteKind: MemoryNoteKind
         let fields: [Field]
     }
 
@@ -130,12 +135,14 @@ struct SessionKnowledgeIndex: Sendable {
     private static func matches(_ filter: HistoryTypeFilter, _ document: Document) -> Bool {
         switch filter {
         case .all: return true
+        case .note: return document.noteKind == .note
+        case .journal: return document.noteKind == .journal
         case .live: return document.origin == .live
-        case .imported: return document.origin != .live
+        case .imported: return document.origin == .audioFile || document.origin == .voiceMemo
         case .voiceMemo: return document.origin == .voiceMemo
-        case .interview: return document.mode == .interview
-        case .meeting: return document.mode == .meeting
-        case .recording: return document.mode == .recording
+        case .interview: return document.noteKind == .interview
+        case .meeting: return document.noteKind == .meeting
+        case .recording: return document.noteKind == .recording
         }
     }
 
@@ -147,6 +154,9 @@ struct SessionKnowledgeIndex: Sendable {
             fields.append(.init(original: text, normalized: normalize(text), weight: weight))
         }
         append(record.goal, weight: 7)
+        append(record.noteKind.label, weight: 7)
+        append(record.labels.joined(separator: " "), weight: 8)
+        append(record.markdownBody, weight: 7)
         append(record.minutes.overview, weight: 6)
         record.minutes.topics.forEach { append($0.title, weight: 8); append($0.summary, weight: 6) }
         record.review.decisions.forEach { append($0.text, weight: 5) }
@@ -156,7 +166,14 @@ struct SessionKnowledgeIndex: Sendable {
         record.notes.forEach { append($0.text, weight: 5) }
         record.transcript.filter(\.isFinal).forEach { append($0.text, weight: 2) }
         record.artifacts.forEach { append($0.title, weight: 4); append($0.body, weight: 2) }
-        return .init(id: record.id, startedAt: record.startedAt, origin: record.origin, mode: record.mode, fields: fields)
+        return .init(
+            id: record.id,
+            startedAt: record.startedAt,
+            origin: record.origin,
+            mode: record.mode,
+            noteKind: record.noteKind,
+            fields: fields
+        )
     }
 
     private static func normalize(_ value: String) -> String {

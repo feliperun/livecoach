@@ -6,13 +6,26 @@ struct KnowledgeProject: Codable, Identifiable, Sendable, Hashable {
     var summary: String
     var createdAt: Date
     var archived: Bool
+    var folderName: String?
 
-    init(id: UUID = UUID(), name: String, summary: String = "", createdAt: Date = Date(), archived: Bool = false) {
+    init(
+        id: UUID = UUID(),
+        name: String,
+        summary: String = "",
+        createdAt: Date = Date(),
+        archived: Bool = false,
+        folderName: String? = nil
+    ) {
         self.id = id
         self.name = name
         self.summary = summary
         self.createdAt = createdAt
         self.archived = archived
+        self.folderName = folderName
+    }
+
+    var storageFolderName: String {
+        folderName ?? "\(ProjectWorkspaceStore.slug(name))-\(id.uuidString.prefix(8).lowercased())"
     }
 }
 

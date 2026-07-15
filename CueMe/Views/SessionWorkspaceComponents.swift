@@ -1,12 +1,13 @@
 import SwiftUI
 
 enum SessionWorkspaceTab: String, CaseIterable, Identifiable {
-    case review, coach, summary, transcript, notes, takeaways, generated
+    case note, review, coach, summary, transcript, notes, takeaways, generated
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
+        case .note: return "Nota"
         case .review: return "Revisão"
         case .coach: return "Coach"
         case .summary: return "Resumo"
@@ -19,6 +20,7 @@ enum SessionWorkspaceTab: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
+        case .note: return "text.book.closed"
         case .review: return "checkmark.seal"
         case .coach: return "sparkles"
         case .summary: return "text.alignleft"

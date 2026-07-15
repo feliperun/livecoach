@@ -1,7 +1,7 @@
 import Foundation
 
 struct MemoryChunk: Sendable, Hashable {
-    enum Kind: String, Sendable { case transcript, topic, decision, action, question, note, artifact }
+    enum Kind: String, Sendable { case content, transcript, topic, decision, action, question, note, artifact }
     let id: String; let sessionID: UUID; let projectID: UUID?; let kind: Kind
     let startedAt: Date; let timestamp: TimeInterval?; let text: String
 }
@@ -25,6 +25,13 @@ enum MemoryChunkBuilder {
             result.append(.init(id: id, sessionID: record.id, projectID: record.projectID,
                 kind: kind, startedAt: record.startedAt, timestamp: timestamp, text: text))
         }
+        append(
+            "content:\(record.id)",
+            .content,
+            ([record.title, record.labels.joined(separator: " "), record.markdownBody])
+                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                .joined(separator: "\n\n")
+        )
         record.minutes.topics.forEach { append("topic:\($0.id)", .topic, "\($0.title): \($0.summary)") }
         record.review.decisions.forEach { append("decision:\($0.id)", .decision, $0.text, $0.evidence.first?.timestamp) }
         record.takeaways.forEach { append("action:\($0.id)", .action, $0.text, $0.evidence.first?.timestamp) }

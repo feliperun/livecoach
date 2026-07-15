@@ -74,6 +74,16 @@ final class AppModel {
     private static let summaryModelKey = "summaryModel"
     private static let glossaryModelKey = "glossaryModel"
     private static let sttSourceKey = "sttSource"
+    private static let themePreferenceKey = "themePreference"
+    private static let usePersonalMemoryInCoachKey = "usePersonalMemoryInCoach"
+    var themePreference: AppThemePreference = .system {
+        didSet { UserDefaults.standard.set(themePreference.rawValue, forKey: Self.themePreferenceKey) }
+    }
+    var usePersonalMemoryInCoach = true {
+        didSet {
+            UserDefaults.standard.set(usePersonalMemoryInCoach, forKey: Self.usePersonalMemoryInCoachKey)
+        }
+    }
     var echoCancellation: Bool = false     // AEC experimental (sem fones); default off
     var trainingMode: Bool = false         // entrevistador por voz (teste e2e + prep solo)
     var recordAudio: Bool = true           // grava o áudio original sincronizado (default ligado)
@@ -115,6 +125,8 @@ final class AppModel {
     var projects: [KnowledgeProject] = []
     var people: [KnowledgePerson] = []
     var activeProjectID: UUID?
+    var libraryProjectFilterID: UUID?
+    var libraryLabelFilter: String?
     var selectedSessionID: UUID?
     var sidebarCollapsed = false
     var historySearch = ""
@@ -174,6 +186,13 @@ final class AppModel {
            let saved = SttSource(rawValue: raw) {
             self.sttSource = saved
         }
+        if let raw = UserDefaults.standard.string(forKey: Self.themePreferenceKey),
+           let saved = AppThemePreference(rawValue: raw) {
+            self.themePreference = saved
+        }
+        if UserDefaults.standard.object(forKey: Self.usePersonalMemoryInCoachKey) != nil {
+            self.usePersonalMemoryInCoach = UserDefaults.standard.bool(forKey: Self.usePersonalMemoryInCoachKey)
+        }
 
         var selected: CoachModel = .sonnet
         if let raw = UserDefaults.standard.string(forKey: Self.coachModelKey),
@@ -206,11 +225,14 @@ final class AppModel {
         translationPipe.onResult = { [weak self] id, text in
             Task { @MainActor in self?.setTranslation(lineID: id, translation: text) }
         }
-        self.history = SessionStore.loadAll()
-        self.knowledgeIndex.rebuild(history)
         let entities = KnowledgeEntityStore.load()
         self.projects = entities.projects
         self.people = entities.people
+        let loadedHistory = SessionStore.loadAll()
+        self.history = isTesting
+            ? loadedHistory
+            : SessionStore.migrateToWorkspace(loadedHistory, projects: entities.projects)
+        self.knowledgeIndex.rebuild(history)
         if ProcessInfo.processInfo.environment["CUEME_UI_TESTING"] == "1" {
             let fixture = UITestFixtures.memory
             self.history = fixture.records
@@ -292,16 +314,21 @@ final class AppModel {
     }
 
     var historySearchResults: [SessionSearchResult] {
+        let scopedHistory = history.filter { record in
+            (libraryProjectFilterID == nil || record.projectID == libraryProjectFilterID)
+                && (libraryLabelFilter == nil || record.labels.contains(libraryLabelFilter ?? ""))
+        }
         let hybrid = semanticMemoryIndex.search(
             query: historySearch,
             date: historyDateFilter,
             type: historyTypeFilter,
-            records: history
+            records: scopedHistory
         )
         if !hybrid.isEmpty || historySearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return hybrid
         }
-        return knowledgeIndex.search(query: historySearch, date: historyDateFilter, type: historyTypeFilter)
+        return SessionKnowledgeIndex(records: scopedHistory)
+            .search(query: historySearch, date: historyDateFilter, type: historyTypeFilter)
     }
 
     var filteredHistory: [SessionRecord] {
@@ -468,7 +495,7 @@ final class AppModel {
     private func saveSessionRecord(stopResult: SessionStopResult) {
         defer { sessionStartedAt = nil; currentSessionID = nil }
         guard let startedAt = sessionStartedAt else { return }
-        let record = SessionRecord(
+        var record = SessionRecord(
             id: currentSessionID ?? UUID(),
             startedAt: startedAt,
             recordingStartedAt: stopResult.recordingStartedAt,
@@ -492,16 +519,22 @@ final class AppModel {
             notes: sessionNotes,
             takeaways: sessionTakeaways,
             review: meetingReview,
-            artifacts: sessionArtifacts
+            artifacts: sessionArtifacts,
+            projectID: activeProjectID
         )
+        if ProcessInfo.processInfo.environment["CUEME_UI_TESTING"] == "1" {
+            record.applyGeneratedTitle("Plano de mitigação da entrega")
+        }
         SessionStore.save(record)
+        if let project = projects.first(where: { $0.id == activeProjectID }),
+           let relocated = SessionStore.relocate(record, to: project) {
+            record = relocated
+        }
         replaceHistoryRecord(record)
         selectedSessionID = record.id
         if backendAvailable, !record.transcript.isEmpty {
             Task {
-                if record.minutes.isEmpty || record.takeaways.isEmpty || record.review.isEmpty {
-                    await generateReview(for: record.id)
-                }
+                await generateReview(for: record.id)
             }
         }
     }

@@ -65,7 +65,6 @@ struct AboutView: View {
         .padding(26)
         .frame(width: 360)
         .background(Theme.background)
-        .preferredColorScheme(.dark)
     }
 }
 

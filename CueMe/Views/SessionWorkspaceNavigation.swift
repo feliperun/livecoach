@@ -18,13 +18,15 @@ struct SessionWorkspaceTabs: View {
     }
 
     private var availableTabs: [SessionWorkspaceTab] {
-        record.origin.supportsLiveCoach
+        if record.origin == .written { return [.note, .generated] }
+        return record.origin.supportsLiveCoach
             ? SessionWorkspaceTab.allCases
             : SessionWorkspaceTab.allCases.filter { $0 != .coach }
     }
 
     private func badge(for tab: SessionWorkspaceTab) -> Int? {
         switch tab {
+        case .note: return nil
         case .review:
             return record.review.decisions.count + record.review.openQuestions.count
                 + record.takeaways.filter { !$0.isDone }.count
@@ -46,6 +48,7 @@ struct SessionWorkspacePane: View {
     @ViewBuilder
     var body: some View {
         switch selection {
+        case .note: MemoryNoteEditor(record: record)
         case .review: SessionReviewPane(record: record, player: player)
         case .coach: SessionCoachPane(record: record)
         case .summary: SessionSummaryPane(record: record)
