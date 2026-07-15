@@ -211,7 +211,7 @@ final class CueMeMemoryE2ETests: XCTestCase {
         XCTAssertTrue(app.buttons["note.label.crescimento"].waitForExistence(timeout: 3))
 
         app.buttons["note.editor.preview"].click()
-        let readingView = app.scrollViews["note.editor.reading"]
+        let readingView = app.descendants(matching: .any)["note.editor.reading"]
         XCTAssertTrue(readingView.waitForExistence(timeout: 3))
         let renderedText = readingView.value as? String ?? ""
         XCTAssertTrue(renderedText.contains("Aprendizados"))
