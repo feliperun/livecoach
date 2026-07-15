@@ -16,6 +16,7 @@ enum SessionArchive {
             "- Data: \(record.startedAt.formatted(date: .long, time: .shortened))",
             "- Duração: \(clock(record.duration))",
             "- Modo: \(record.mode.label)",
+            "- Origem: \(record.origin.label)",
             "- Idioma: \(record.conversationLang)",
             ""
         ]

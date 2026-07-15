@@ -14,6 +14,7 @@ struct SessionWorkspaceHeader: View {
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .lineLimit(1)
                 HStack(spacing: 7) {
+                    Label(record.origin.label, systemImage: record.origin == .live ? "dot.radiowaves.left.and.right" : "square.and.arrow.down")
                     Label(record.startedAt.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
                     Label(SessionArchive.clock(record.duration), systemImage: "clock")
                     if record.hasAudio {

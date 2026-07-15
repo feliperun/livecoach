@@ -44,6 +44,8 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
    `Audio/MeetingRecording`) — snapshots a session into one portable directory:
    typed JSON, mandatory human-readable Markdown and synchronized audio. Notes,
    takeaways and generated artifacts rewrite both state representations.
+   `SessionOrigin` records whether memory came from live capture, an audio file
+   or Voice Memos; imported sources never persist their original absolute path.
 8. **Views** (`Views/`) — SwiftUI only. Reads `AppModel`/`SessionRecord`, calls
    `AppModel` command methods, never touches `SessionCoordinator` or the audio
    layer directly.
@@ -62,6 +64,7 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 | LLM brain (DeepSeek) | Direct DeepSeek HTTP/SSE via `DeepSeekSession` | Opt-in coach models (`deepseek-v4-pro`/`-flash`); API key in Keychain (`DeepSeekCredential`), non-thinking for latency. See [ADR 0013](adr/0013-deepseek-coach-via-direct-api.md). |
 | Word-class tagging | `NaturalLanguage`/`NLTagger` in `Highlighter` | On-device; tiers translated text for fast scanning. |
 | Audio playback | Two `AVAudioPlayer`s in `MeetingPlayer` | Synced via a shared `deviceCurrentTime` anchor, not a mixer graph. |
+| Imported audio | `AudioImportService` + `PrerecordedAudioTranscriber` | Read-only source; normalized M4A; native file STT or Deepgram batch. |
 | CV import | `PDFKit` in `BriefEditor` | Extracts text from a pasted/imported résumé. |
 | Persistence | `FileManager` + `JSONEncoder`/`Decoder` in `SessionStore`/`BriefStore`/`MeetingContextStore` | User-selectable session archive; briefs, reusable contexts and glossary cache in Application Support. |
 | Packaging | `xcodebuild` + `hdiutil` in `scripts/package.sh` | Local only — see [Getting Started](GETTING-STARTED.md) and [Packaging](PACKAGING.md). |
@@ -105,6 +108,13 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 - **New recordings use portable, speech-quality AAC-LC.** Each speaker is stored
   separately as mono 48 kHz/128 kbps `.m4a`; STT keeps its independent 16 kHz
   conversion. `MeetingRecording` must continue resolving legacy `.caf` files.
+- **Imported audio is passive session memory.** It has an explicit non-live
+  `SessionOrigin`, no Coach cards and no Coach workspace. The original source is
+  read-only; the archive owns a portable M4A copy ([ADR 0026](adr/0026-imported-audio-and-local-knowledge-search.md)).
+- **Knowledge search never calls an external service.** The in-memory index is
+  rebuilt from durable `SessionRecord` fields and applies date/type filters
+  before lexical scoring. Selecting Deepgram for import affects transcription,
+  not search.
 - **A session is never silently healthy.** Mic and system channel states are
   independent; digital-zero mic data and an interrupted `SCStream` must be
   surfaced and repaired or remain visibly unavailable ([ADR 0014](adr/0014-per-channel-capture-health.md)).

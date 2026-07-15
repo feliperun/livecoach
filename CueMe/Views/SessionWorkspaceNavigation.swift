@@ -6,7 +6,7 @@ struct SessionWorkspaceTabs: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            ForEach(SessionWorkspaceTab.allCases) { item in
+            ForEach(availableTabs) { item in
                 SessionTabButton(item: item, count: badge(for: item), selected: selection == item) {
                     withAnimation(.snappy(duration: 0.18)) { selection = item }
                 }
@@ -15,6 +15,12 @@ struct SessionWorkspaceTabs: View {
         .padding(4)
         .background(Theme.interactive, in: RoundedRectangle(cornerRadius: 11))
         .padding(.horizontal, 16).padding(.bottom, 12)
+    }
+
+    private var availableTabs: [SessionWorkspaceTab] {
+        record.origin.supportsLiveCoach
+            ? SessionWorkspaceTab.allCases
+            : SessionWorkspaceTab.allCases.filter { $0 != .coach }
     }
 
     private func badge(for tab: SessionWorkspaceTab) -> Int? {

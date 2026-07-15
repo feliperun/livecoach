@@ -1,5 +1,22 @@
 import Foundation
 
+enum SessionOrigin: String, Codable, CaseIterable, Sendable, Identifiable {
+    case live
+    case audioFile
+    case voiceMemo
+
+    var id: String { rawValue }
+    var supportsLiveCoach: Bool { self == .live }
+
+    var label: String {
+        switch self {
+        case .live: return "Ao vivo"
+        case .audioFile: return "Áudio importado"
+        case .voiceMemo: return "Voice Memo"
+        }
+    }
+}
+
 /// Snapshot de uma sessão terminada (treino ou conversa real), para o histórico.
 struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
     static func == (l: SessionRecord, r: SessionRecord) -> Bool { l.id == r.id }
@@ -29,6 +46,8 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
     var archiveFolderName: String
     var notes: [SessionNote]
     var takeaways: [SessionTakeaway]
+    var origin: SessionOrigin
+    var displayTitle: String?
     var review: MeetingReview
     var artifacts: [SessionArtifact]
 
@@ -57,6 +76,8 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         archiveFolderName: String? = nil,
         notes: [SessionNote] = [],
         takeaways: [SessionTakeaway] = [],
+        origin: SessionOrigin = .live,
+        displayTitle: String? = nil,
         review: MeetingReview = .empty,
         artifacts: [SessionArtifact] = []
     ) {
@@ -84,6 +105,8 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         self.archiveFolderName = archiveFolderName ?? SessionArchive.folderName(startedAt: startedAt, id: id)
         self.notes = notes
         self.takeaways = takeaways
+        self.origin = origin
+        self.displayTitle = displayTitle
         self.review = review
         self.artifacts = artifacts
     }
@@ -118,6 +141,8 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
             ?? SessionArchive.folderName(startedAt: startedAt, id: id)
         notes = try c.decodeIfPresent([SessionNote].self, forKey: .notes) ?? []
         takeaways = try c.decodeIfPresent([SessionTakeaway].self, forKey: .takeaways) ?? []
+        origin = try c.decodeIfPresent(SessionOrigin.self, forKey: .origin) ?? .live
+        displayTitle = try c.decodeIfPresent(String.self, forKey: .displayTitle)
         review = try c.decodeIfPresent(MeetingReview.self, forKey: .review) ?? .empty
         artifacts = try c.decodeIfPresent([SessionArtifact].self, forKey: .artifacts) ?? []
     }
@@ -127,6 +152,9 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
 
     /// Título: primeira pergunta do interlocutor, senão modo + treino.
     var title: String {
+        if let displayTitle = displayTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !displayTitle.isEmpty {
+            return String(displayTitle.prefix(120))
+        }
         if let q = transcript.first(where: { $0.speaker == .other && $0.isFinal })?.text, !q.isEmpty {
             return String(q.prefix(80))
         }

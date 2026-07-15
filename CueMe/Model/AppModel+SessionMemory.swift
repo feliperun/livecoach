@@ -182,7 +182,7 @@ extension AppModel {
     }
 
     func chooseArchiveRoot() {
-        guard !isSessionBusy else { return }
+        guard !isSessionBusy, audioImportStatus?.isActive != true else { return }
         let panel = NSOpenPanel()
         panel.title = "Escolha onde salvar suas reuniões"
         panel.prompt = "Usar esta pasta"

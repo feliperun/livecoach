@@ -41,24 +41,9 @@ actor DeepgramTranscriber: SttSession {
 
     func start() async throws {
         guard !apiKey.isEmpty else { throw DeepgramError.missingAPIKey }
-        var request = URLRequest(url: try DeepgramLiveRequest.url(config: config))
-        request.setValue("Token \(apiKey)", forHTTPHeaderField: "Authorization")
-
-        let delegate = DeepgramWebSocketDelegate()
-        let networkSession = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
-        let socket = networkSession.webSocketTask(with: request)
-        self.networkSession = networkSession
-        self.socket = socket
-        socket.resume()
-        do {
-            try await Self.waitForOpen(delegate.opened)
-        } catch {
-            socket.cancel(with: .goingAway, reason: nil)
-            networkSession.invalidateAndCancel()
-            self.socket = nil
-            self.networkSession = nil
-            throw DeepgramError.connectionFailed
-        }
+        let connection = try await DeepgramSocketConnector.connect(config: config, apiKey: apiKey)
+        self.networkSession = connection.session
+        self.socket = connection.socket
         isActive = true
 
         senderTask = Task { [weak self, audioStream] in
@@ -140,59 +125,4 @@ actor DeepgramTranscriber: SttSession {
         }
     }
 
-    private static func waitForOpen(_ opened: AsyncThrowingStream<Void, Error>) async throws {
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask {
-                for try await _ in opened { return }
-                throw DeepgramError.connectionFailed
-            }
-            group.addTask {
-                try await Task.sleep(for: .seconds(8))
-                throw DeepgramError.connectionFailed
-            }
-            guard let result = try await group.next() else { throw DeepgramError.connectionFailed }
-            group.cancelAll()
-            return result
-        }
-    }
-}
-
-private final class DeepgramWebSocketDelegate: NSObject, URLSessionWebSocketDelegate, @unchecked Sendable {
-    let opened: AsyncThrowingStream<Void, Error>
-    private let continuation: AsyncThrowingStream<Void, Error>.Continuation
-
-    override init() {
-        let pair = AsyncThrowingStream<Void, Error>.makeStream()
-        self.opened = pair.stream
-        self.continuation = pair.continuation
-        super.init()
-    }
-
-    func urlSession(
-        _ session: URLSession,
-        webSocketTask: URLSessionWebSocketTask,
-        didOpenWithProtocol protocol: String?
-    ) {
-        continuation.yield(())
-        continuation.finish()
-    }
-
-    func urlSession(
-        _ session: URLSession,
-        task: URLSessionTask,
-        didCompleteWithError error: (any Error)?
-    ) {
-        if let error { continuation.finish(throwing: error) }
-    }
-
-    func urlSession(
-        _ session: URLSession,
-        webSocketTask: URLSessionWebSocketTask,
-        didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
-        reason: Data?
-    ) {
-        if closeCode != .normalClosure {
-            continuation.finish(throwing: DeepgramError.connectionFailed)
-        }
-    }
 }

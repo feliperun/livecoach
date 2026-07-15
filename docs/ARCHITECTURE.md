@@ -10,6 +10,7 @@
 AVAudioEngine (mic, .self) ─────┐                                        ┌─▶ NativeTranscriber (SpeechAnalyzer)
                                 ├─▶ SttProvider (→16k mono PCM16) ────────┤
 ScreenCaptureKit (system, .other)┘        │                               └─▶ DeepgramTranscriber (Nova-3 WebSocket)
+Imported audio / Voice Memos ────────────┴─▶ AudioImportService ──────────▶ Native file STT / Deepgram batch
                                            ▼                                   ▼
                                     MeetingRecorder                     TranscriptBus (actor)
                                   (synced dual .m4a files,     ┌────────────┬────────────┬────────────┐
@@ -45,11 +46,14 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
   files at 48 kHz/128 kbps for later playback), `MeetingPlayer` (two
   `AVAudioPlayer`s synced via
   `deviceCurrentTime`), `WaveformGenerator` (background amplitude envelope for
-  the player UI).
+  the player UI), `AudioImportService` (read-only source import and portable
+  AAC/M4A normalization).
 - **STT/** — provider abstraction with `NativeTranscriber`
   (`SpeechAnalyzer`/`SpeechTranscriber`, default and on-device) or opt-in
   `DeepgramTranscriber` (Nova-3 WebSocket, continuous mono PCM16 resampling,
   endpointed partial/final assembly and Keychain credential), plus
+  `PrerecordedAudioTranscriber` (native file ranges or Deepgram batch utterances
+  with diarization), plus
   `TranslationPipe` (feeds Apple `Translation` from the `.translationTask`).
 - **Bus/** — `TranscriptBus` actor: fan-out `AsyncStream`, durable turn context,
   incremental cursors and correction updates.
@@ -75,6 +79,7 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
   `HotkeyManager` (global ⌥Space show/hide), `SessionBrief` (+ `BriefStore`),
   reusable `BriefProfile`s, `SessionRecord` (+ notes, review, takeaways and generated artifacts),
   `SessionArchive`/`SessionStore` (portable JSON + Markdown history persistence),
+  `SessionKnowledgeIndex` (weighted local full-archive search),
   `LiveHealthMonitor`/`SessionIntegrityReport` metadata-only health policies, `Types`.
 - **Views/** — glance-first SwiftUI: `HeaderBar` with live channel meters,
   compact `QuestionBanner`, user-controlled `CoachingPane`, compact live health,
@@ -113,6 +118,12 @@ and persisted post-session generation. `recordingStartedAt` anchors
 transcript seeking to the audio clock. Legacy `.caf` and Application Support
 JSON/audio are still discovered and played back during migration. Deleting a session removes
 its complete directory and any legacy counterpart.
+
+Audio files and best-effort read-only Voice Memos discovery create passive
+`SessionOrigin.audioFile`/`.voiceMemo` records in the same archive. The selected
+STT provider transcribes them before the normal review lane extracts minutes and
+actions. The sidebar's local knowledge index searches every durable memory field
+with date and session-type filters ([ADR 0026](adr/0026-imported-audio-and-local-knowledge-search.md)).
 
 ## Runtime & hosting
 

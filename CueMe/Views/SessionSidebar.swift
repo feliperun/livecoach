@@ -4,6 +4,14 @@ struct SessionSidebar: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
+        @Bindable var app = app
+        let results = app.historySearchResults
+        let records = Dictionary(uniqueKeysWithValues: app.history.map { ($0.id, $0) })
+        let visibleRecords = results.compactMap { records[$0.recordID] }
+        let snippets = Dictionary(uniqueKeysWithValues: results.compactMap { result in
+            result.snippet.map { (result.recordID, $0) }
+        })
+
         VStack(spacing: 10) {
             HStack(spacing: 9) {
                 if !app.sidebarCollapsed {
@@ -28,23 +36,25 @@ struct SessionSidebar: View {
             .padding(.top, 12)
 
             liveButton
+            importButton
 
             if !app.sidebarCollapsed {
+                historyControls
                 HStack {
-                    Text("RECENTES")
+                    Text(app.historySearch.isEmpty ? "RECENTES" : "RESULTADOS")
                         .font(.system(size: 9, weight: .bold, design: .rounded))
                         .tracking(0.9)
                         .foregroundStyle(.tertiary)
                     Spacer()
-                    Text("\(app.history.count)")
+                    Text("\(visibleRecords.count)")
                         .font(.system(size: 9, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.tertiary)
                 }
                 .padding(.horizontal, 13).padding(.top, 5)
                 ScrollView {
                     LazyVStack(spacing: 3) {
-                        ForEach(app.history) { record in
-                            sessionButton(record)
+                        ForEach(visibleRecords) { record in
+                            sessionButton(record, snippet: snippets[record.id])
                         }
                     }
                     .padding(.horizontal, 7)
@@ -52,7 +62,7 @@ struct SessionSidebar: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 7) {
-                        ForEach(app.history.prefix(12)) { record in
+                        ForEach(visibleRecords.prefix(12)) { record in
                             compactButton(record)
                         }
                     }
@@ -79,9 +89,114 @@ struct SessionSidebar: View {
             .padding(.horizontal, 12).padding(.vertical, 11)
             .help(app.archivePath)
         }
-        .frame(width: app.sidebarCollapsed ? 58 : 242)
+        .frame(width: app.sidebarCollapsed ? 58 : 268)
         .background(Theme.sidebar)
         .animation(.snappy(duration: 0.24), value: app.sidebarCollapsed)
+    }
+
+    private var importButton: some View {
+        Menu {
+            Button("Arquivo de áudio…", systemImage: "waveform.badge.plus") {
+                app.chooseAudioFiles()
+            }
+            Button("Apple Voice Memos…", systemImage: "mic.badge.plus") {
+                app.showVoiceMemoImporter = true
+            }
+        } label: {
+            Group {
+                if app.sidebarCollapsed {
+                    Image(systemName: "square.and.arrow.down")
+                        .frame(width: 32, height: 28)
+                } else {
+                    HStack {
+                        Label("Importar reunião", systemImage: "square.and.arrow.down")
+                        Spacer()
+                        Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
+                    }
+                    .padding(.horizontal, 10).frame(height: 30)
+                }
+            }
+            .font(.system(size: 10.5, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .background(Theme.interactive, in: RoundedRectangle(cornerRadius: 9))
+        }
+        .menuStyle(.borderlessButton)
+        .disabled(app.isSessionBusy || app.audioImportStatus?.isActive == true)
+        .padding(.horizontal, app.sidebarCollapsed ? 8 : 10)
+        .overlay(alignment: .bottom) {
+            if !app.sidebarCollapsed, let status = app.audioImportStatus {
+                ImportStatusRow(status: status)
+                    .offset(y: 49)
+            }
+        }
+        .padding(.bottom, !app.sidebarCollapsed && app.audioImportStatus != nil ? 50 : 0)
+    }
+
+    private var historyControls: some View {
+        VStack(spacing: 7) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundStyle(.tertiary)
+                TextField("Buscar assuntos e decisões", text: Binding(
+                    get: { app.historySearch }, set: { app.historySearch = $0 }
+                ))
+                .textFieldStyle(.plain).font(.system(size: 10.5))
+                if !app.historySearch.isEmpty {
+                    Button { app.historySearch = "" } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.plain).foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.horizontal, 9).frame(height: 30)
+            .background(Theme.panelRaised, in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.divider))
+            HStack(spacing: 6) {
+                filterMenu(
+                    title: app.historyDateFilter.label,
+                    icon: "calendar",
+                    values: HistoryDateFilter.allCases,
+                    selection: app.historyDateFilter
+                ) { app.historyDateFilter = $0 }
+                filterMenu(
+                    title: app.historyTypeFilter.label,
+                    icon: "line.3.horizontal.decrease.circle",
+                    values: HistoryTypeFilter.allCases,
+                    selection: app.historyTypeFilter
+                ) { app.historyTypeFilter = $0 }
+            }
+        }
+        .padding(.horizontal, 10)
+    }
+
+    private func filterMenu<Value: Identifiable & Equatable>(
+        title: String,
+        icon: String,
+        values: [Value],
+        selection: Value,
+        onSelect: @escaping (Value) -> Void
+    ) -> some View where Value.ID == String {
+        Menu {
+            ForEach(values) { value in
+                Button {
+                    onSelect(value)
+                } label: {
+                    HStack {
+                        Text(filterLabel(value))
+                        if value == selection { Image(systemName: "checkmark") }
+                    }
+                }
+            }
+        } label: {
+            Label(title, systemImage: icon)
+                .font(.system(size: 9.5, weight: .semibold)).lineLimit(1)
+                .frame(maxWidth: .infinity).padding(.horizontal, 7).frame(height: 25)
+                .background(Theme.interactive, in: RoundedRectangle(cornerRadius: 7))
+        }
+        .menuStyle(.borderlessButton)
+    }
+
+    private func filterLabel<Value>(_ value: Value) -> String {
+        if let date = value as? HistoryDateFilter { return date.label }
+        if let type = value as? HistoryTypeFilter { return type.label }
+        return "Filtro"
     }
 
     private var liveButton: some View {
@@ -119,20 +234,21 @@ struct SessionSidebar: View {
         .padding(.horizontal, app.sidebarCollapsed ? 5 : 8)
     }
 
-    private func sessionButton(_ record: SessionRecord) -> some View {
+    private func sessionButton(_ record: SessionRecord, snippet: String?) -> some View {
         Button { app.selectSession(record.id) } label: {
             HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(app.selectedSessionID == record.id ? Theme.violet : .clear)
                     .frame(width: 3, height: 24)
-                Image(systemName: record.hasAudio ? "waveform" : "doc.text")
+                Image(systemName: sessionIcon(record))
                     .font(.system(size: 9.5, weight: .semibold))
                     .foregroundStyle(app.selectedSessionID == record.id ? Theme.violet : .secondary)
                     .frame(width: 16)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(record.title).lineLimit(1)
                         .font(.system(size: 11.5, weight: .semibold))
-                    Text(record.startedAt.formatted(date: .abbreviated, time: .shortened))
+                    Text(snippet ?? record.startedAt.formatted(date: .abbreviated, time: .shortened))
+                        .lineLimit(1)
                         .font(.system(size: 9.5)).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
@@ -152,7 +268,7 @@ struct SessionSidebar: View {
 
     private func compactButton(_ record: SessionRecord) -> some View {
         Button { app.selectSession(record.id) } label: {
-            Image(systemName: record.hasAudio ? "waveform" : "doc.text")
+            Image(systemName: sessionIcon(record))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(app.selectedSessionID == record.id ? Theme.violet : .secondary)
                 .frame(width: 32, height: 32)
@@ -161,5 +277,45 @@ struct SessionSidebar: View {
         }
         .buttonStyle(.plain)
         .help(record.title)
+    }
+
+    private func sessionIcon(_ record: SessionRecord) -> String {
+        switch record.origin {
+        case .audioFile: return "waveform.badge.plus"
+        case .voiceMemo: return "mic.fill"
+        case .live: return record.hasAudio ? "waveform" : "doc.text"
+        }
+    }
+}
+
+private struct ImportStatusRow: View {
+    @Environment(AppModel.self) private var app
+    let status: AudioImportStatus
+
+    var body: some View {
+        HStack(spacing: 7) {
+            if status.isActive {
+                ProgressView().controlSize(.mini)
+            } else {
+                Image(systemName: status.phase == .completed ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    .foregroundStyle(status.phase == .completed ? Theme.mint : Theme.rose)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(status.title).font(.system(size: 9.5, weight: .semibold)).lineLimit(1)
+                Text(status.detail).font(.system(size: 8.5)).foregroundStyle(.secondary).lineLimit(2)
+            }
+            Spacer(minLength: 0)
+            if status.phase == .failed, let sessionID = status.sessionID {
+                Button { Task { await app.retryImportedProcessing(sessionID: sessionID) } } label: {
+                    Image(systemName: "arrow.clockwise")
+                }.help("Tentar novamente")
+            } else if !status.isActive {
+                Button(action: app.dismissAudioImportStatus) { Image(systemName: "xmark") }
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(8).frame(width: 248)
+        .background(Theme.panelRaised, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.divider))
     }
 }

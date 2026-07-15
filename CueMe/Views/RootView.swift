@@ -31,12 +31,7 @@ struct RootView: View {
             nonisolated(unsafe) let s = session
             await pipe.run(session: s)
         }
-        .sheet(isPresented: $app.showSettings) {
-            BriefEditor()
-        }
-        .sheet(isPresented: $app.showPreflight) {
-            PreflightView()
-        }
+        .modifier(RootSheetsModifier(app: app))
     }
 }
 

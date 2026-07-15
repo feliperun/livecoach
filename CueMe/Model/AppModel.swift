@@ -106,10 +106,18 @@ final class AppModel {
     var permissionDiagnosis: PermissionDiagnosis?
     var currentQuestionID: UUID?           // última pergunta/deixa do interlocutor
 
-    // Histórico de sessões.
-    var history: [SessionRecord] = []
+    // Histórico de sessões e índice local pré-normalizado para busca instantânea.
+    @ObservationIgnored private var knowledgeIndex = SessionKnowledgeIndex()
+    var history: [SessionRecord] = [] {
+        didSet { knowledgeIndex.rebuild(history) }
+    }
     var selectedSessionID: UUID?
     var sidebarCollapsed = false
+    var historySearch = ""
+    var historyDateFilter: HistoryDateFilter = .all
+    var historyTypeFilter: HistoryTypeFilter = .all
+    var audioImportStatus: AudioImportStatus?
+    var showVoiceMemoImporter = false
     var sessionNotes: [SessionNote] = []
     var sessionTakeaways: [SessionTakeaway] = []
     var sessionArtifacts: [SessionArtifact] = []
@@ -187,6 +195,7 @@ final class AppModel {
             Task { @MainActor in self?.setTranslation(lineID: id, translation: text) }
         }
         self.history = SessionStore.loadAll()
+        self.knowledgeIndex.rebuild(history)
         self.profiles = BriefProfileStore.load()
         self.contexts = MeetingContextStore.load()
         let availableIDs = Set(contexts.map(\.id))
@@ -260,10 +269,30 @@ final class AppModel {
         return coachCards.first(where: { $0.id == activeCoachCardID })
     }
 
+    var historySearchResults: [SessionSearchResult] {
+        knowledgeIndex.search(
+            query: historySearch,
+            date: historyDateFilter,
+            type: historyTypeFilter
+        )
+    }
+
+    var filteredHistory: [SessionRecord] {
+        let records = Dictionary(uniqueKeysWithValues: history.map { ($0.id, $0) })
+        return historySearchResults.compactMap { records[$0.recordID] }
+    }
+
+    func historySnippet(for recordID: UUID) -> String? {
+        guard !historySearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return historySearchResults.first { $0.recordID == recordID }?.snippet
+    }
+
     // MARK: - Comandos
 
     func start() {
-        guard !isSessionBusy, glossaryGenerationState != .generating else { return }
+        guard !isSessionBusy,
+              audioImportStatus?.isActive != true,
+              glossaryGenerationState != .generating else { return }
         guard sttSource != .deepgram || deepgramAvailable else {
             sessionState = .error("Configure a chave da Deepgram.")
             showSettings = true

@@ -72,3 +72,4 @@ proposed → active → superseded
 | [0023](0023-adaptive-coach-and-incremental-minutes.md) | Adaptive coach and incremental meeting minutes | superseded by 0025 |
 | [0024](0024-reusable-contexts-and-preflight-glossary.md) | Reusable contexts and cached preflight glossary | active |
 | [0025](0025-adaptive-live-experience-and-session-review.md) | Adaptive live experience and durable session review | active |
+| [0026](0026-imported-audio-and-local-knowledge-search.md) | Imported audio sessions and local knowledge search | active |
