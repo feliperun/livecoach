@@ -73,3 +73,4 @@ proposed → active → superseded
 | [0024](0024-reusable-contexts-and-preflight-glossary.md) | Reusable contexts and cached preflight glossary | active |
 | [0025](0025-adaptive-live-experience-and-session-review.md) | Adaptive live experience and durable session review | active |
 | [0026](0026-imported-audio-and-local-knowledge-search.md) | Imported audio sessions and local knowledge search | active |
+| [0027](0027-supported-external-audio-ingress.md) | Supported external audio ingress | active |

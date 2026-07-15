@@ -11,6 +11,10 @@ struct CueMeApp: App {
             RootView()
                 .environment(app)
                 .frame(minWidth: 760, minHeight: 560)
+                .task { delegate.connect(app) }
+                .onOpenURL { url in
+                    Task { await app.handleExternalURL(url) }
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1_020, height: 760)
@@ -57,10 +61,48 @@ private struct AboutCommand: Commands {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let hotkeys = HotkeyManager()
+    private weak var app: AppModel?
+    private var pendingFileURLs: [URL] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         hotkeys.onToggle = { HotkeyManager.toggleMainWindow() }
         hotkeys.start()
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(externalAudioReady),
+            name: .cueMeExternalAudioReady,
+            object: nil
+        )
+    }
+
+    func connect(_ app: AppModel) {
+        self.app = app
+        let files = pendingFileURLs
+        pendingFileURLs.removeAll()
+        Task {
+            if !files.isEmpty { await app.importAudioFiles(files) }
+            await app.consumeExternalAudioInbox()
+        }
+    }
+
+    func applicationWillBecomeActive(_ notification: Notification) {
+        guard let app else { return }
+        Task { await app.consumeExternalAudioInbox() }
+    }
+
+    func application(_ sender: NSApplication, openFiles filenames: [String]) {
+        let urls = filenames.map(URL.init(fileURLWithPath:))
+        if let app {
+            Task { await app.importAudioFiles(urls) }
+        } else {
+            pendingFileURLs.append(contentsOf: urls)
+        }
+        sender.reply(toOpenOrPrint: .success)
+    }
+
+    @objc private func externalAudioReady() {
+        guard let app else { return }
+        Task { await app.consumeExternalAudioInbox() }
     }
 }
 

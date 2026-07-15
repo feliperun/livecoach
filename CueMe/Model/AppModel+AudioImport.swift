@@ -19,13 +19,41 @@ extension AppModel {
     }
 
     func importAudioFiles(_ urls: [URL]) async {
-        for url in urls {
-            await importAudio(url: url, origin: .audioFile, title: nil)
+        await importExternalAudioFiles(urls, origin: .audioFile)
+    }
+
+    func importDroppedAudio(_ providers: [NSItemProvider]) async {
+        guard await ExternalAudioDropReceiver.enqueue(providers) > 0 else { return }
+        await consumeExternalAudioInbox()
+    }
+
+    func importExternalAudioFiles(
+        _ urls: [URL],
+        origin: SessionOrigin,
+        removeAfterImport: Bool = false
+    ) async {
+        for url in urls where ExternalAudioInbox.isSupported(filename: url.lastPathComponent) {
+            let title = origin == .voiceMemo ? ExternalAudioInbox.displayName(for: url) : nil
+            let imported = await importAudio(url: url, origin: origin, title: title)
+            if imported, removeAfterImport { ExternalAudioInbox.remove(url) }
         }
     }
 
-    func importVoiceMemo(_ item: VoiceMemoItem) async {
-        await importAudio(url: item.url, origin: .voiceMemo, title: item.title)
+    func consumeExternalAudioInbox() async {
+        guard !isSessionBusy, audioImportStatus?.isActive != true else { return }
+        await importExternalAudioFiles(
+            ExternalAudioInbox.pendingURLs(),
+            origin: .voiceMemo,
+            removeAfterImport: true
+        )
+    }
+
+    func handleExternalURL(_ url: URL) async {
+        if url.scheme?.lowercased() == "cueme" {
+            await consumeExternalAudioInbox()
+        } else if url.isFileURL, ExternalAudioInbox.isSupported(filename: url.lastPathComponent) {
+            await importAudioFiles([url])
+        }
     }
 
     func retryImportedProcessing(sessionID: UUID) async {
@@ -38,8 +66,8 @@ extension AppModel {
         audioImportStatus = nil
     }
 
-    private func importAudio(url: URL, origin: SessionOrigin, title: String?) async {
-        guard !isSessionBusy, audioImportStatus?.isActive != true else { return }
+    private func importAudio(url: URL, origin: SessionOrigin, title: String?) async -> Bool {
+        guard !isSessionBusy, audioImportStatus?.isActive != true else { return false }
         let displayName = title ?? url.deletingPathExtension().lastPathComponent
         audioImportStatus = .init(
             phase: .preparing,
@@ -60,6 +88,7 @@ extension AppModel {
             replaceHistoryRecord(record)
             selectedSessionID = record.id
             await processImportedRecord(record)
+            return true
         } catch {
             audioImportStatus = .init(
                 phase: .failed,
@@ -67,6 +96,7 @@ extension AppModel {
                 detail: error.localizedDescription,
                 sessionID: nil
             )
+            return false
         }
     }
 

@@ -95,24 +95,16 @@ struct SessionSidebar: View {
     }
 
     private var importButton: some View {
-        Menu {
-            Button("Arquivo de áudio…", systemImage: "waveform.badge.plus") {
-                app.chooseAudioFiles()
-            }
-            Button("Apple Voice Memos…", systemImage: "mic.badge.plus") {
-                app.showVoiceMemoImporter = true
-            }
+        Button {
+            app.chooseAudioFiles()
         } label: {
             Group {
                 if app.sidebarCollapsed {
                     Image(systemName: "square.and.arrow.down")
                         .frame(width: 32, height: 28)
                 } else {
-                    HStack {
-                        Label("Importar reunião", systemImage: "square.and.arrow.down")
-                        Spacer()
-                        Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
-                    }
+                    Label("Importar áudio", systemImage: "square.and.arrow.down")
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 10).frame(height: 30)
                 }
             }
@@ -120,7 +112,8 @@ struct SessionSidebar: View {
             .foregroundStyle(.secondary)
             .background(Theme.interactive, in: RoundedRectangle(cornerRadius: 9))
         }
-        .menuStyle(.borderlessButton)
+        .buttonStyle(.plain)
+        .help("Escolha um arquivo ou, no Voice Memos, use Compartilhar → CueMe.")
         .disabled(app.isSessionBusy || app.audioImportStatus?.isActive == true)
         .padding(.horizontal, app.sidebarCollapsed ? 8 : 10)
         .overlay(alignment: .bottom) {

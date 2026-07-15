@@ -4,6 +4,7 @@ import Translation
 /// Unified live and review workspace with an always-visible session rail.
 struct RootView: View {
     @Environment(AppModel.self) private var app
+    @State private var audioDropTargeted = false
 
     var body: some View {
         @Bindable var app = app
@@ -26,6 +27,23 @@ struct RootView: View {
             }
         }
         .background(Theme.background.ignoresSafeArea())
+        .overlay {
+            if audioDropTargeted {
+                AudioDropOverlay()
+                    .allowsHitTesting(false)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            }
+        }
+        .onDrop(
+            of: ["public.audio"],
+            isTargeted: $audioDropTargeted
+        ) { providers in
+            guard !app.isSessionBusy, app.audioImportStatus?.isActive != true else { return false }
+            Task {
+                await app.importDroppedAudio(providers)
+            }
+            return true
+        }
         .preferredColorScheme(.dark)
         .translationTask(app.translationConfig) { session in
             nonisolated(unsafe) let s = session
@@ -75,6 +93,7 @@ private struct LiveWorkspace: View {
 
 private struct SessionLaunchView: View {
     @Environment(AppModel.self) private var app
+    @AppStorage("didDismissVoiceMemoImportHint") private var didDismissVoiceMemoImportHint = false
 
     var body: some View {
         VStack(spacing: 22) {
@@ -104,6 +123,38 @@ private struct SessionLaunchView: View {
                 capability("brain.head.profile", "Lembra")
             }
 
+            HStack(spacing: 8) {
+                Button {
+                    app.chooseAudioFiles()
+                } label: {
+                    Label("Importar áudio", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                Text("ou arraste aqui")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.tertiary)
+            }
+
+            if !didDismissVoiceMemoImportHint {
+                HStack(spacing: 7) {
+                    Image(systemName: "mic.badge.plus")
+                        .foregroundStyle(Theme.violet)
+                    Text("Voice Memos: Compartilhar → CueMe")
+                        .font(.system(size: 10.5, weight: .semibold))
+                    Button {
+                        didDismissVoiceMemoImportHint = true
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 10).padding(.vertical, 7)
+                .background(Theme.violet.opacity(0.08), in: Capsule())
+                .overlay(Capsule().strokeBorder(Theme.violet.opacity(0.2)))
+            }
+
             Label("⌘ ↩ para iniciar", systemImage: "keyboard")
                 .font(.system(size: 10.5, weight: .medium))
                 .foregroundStyle(.tertiary)
@@ -120,6 +171,26 @@ private struct SessionLaunchView: View {
             .padding(.horizontal, 11).padding(.vertical, 7)
             .background(Theme.interactive, in: Capsule())
             .overlay(Capsule().strokeBorder(Theme.divider))
+    }
+}
+
+private struct AudioDropOverlay: View {
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.black.opacity(0.42))
+            VStack(spacing: 10) {
+                Image(systemName: "waveform.badge.plus")
+                    .font(.system(size: 30, weight: .semibold))
+                    .foregroundStyle(Theme.brand)
+                    .symbolEffect(.breathe, options: .repeating.speed(0.8))
+                Text("Solte para importar")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+            }
+            .padding(.horizontal, 24).padding(.vertical, 18)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.violet.opacity(0.45)))
+        }
+        .ignoresSafeArea()
     }
 }
 

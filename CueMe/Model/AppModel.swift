@@ -117,7 +117,6 @@ final class AppModel {
     var historyDateFilter: HistoryDateFilter = .all
     var historyTypeFilter: HistoryTypeFilter = .all
     var audioImportStatus: AudioImportStatus?
-    var showVoiceMemoImporter = false
     var sessionNotes: [SessionNote] = []
     var sessionTakeaways: [SessionTakeaway] = []
     var sessionArtifacts: [SessionArtifact] = []
@@ -372,6 +371,7 @@ final class AppModel {
             self.coordinator = nil
             self.activeCoachCardID = nil
             self.sessionState = .idle
+            await self.consumeExternalAudioInbox()
         }
     }
 

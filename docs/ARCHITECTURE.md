@@ -10,7 +10,7 @@
 AVAudioEngine (mic, .self) ─────┐                                        ┌─▶ NativeTranscriber (SpeechAnalyzer)
                                 ├─▶ SttProvider (→16k mono PCM16) ────────┤
 ScreenCaptureKit (system, .other)┘        │                               └─▶ DeepgramTranscriber (Nova-3 WebSocket)
-Imported audio / Voice Memos ────────────┴─▶ AudioImportService ──────────▶ Native file STT / Deepgram batch
+Share / Shortcuts / files / drop ─▶ ExternalAudioInbox ─┴─▶ AudioImportService ─▶ Native file STT / Deepgram batch
                                            ▼                                   ▼
                                     MeetingRecorder                     TranscriptBus (actor)
                                   (synced dual .m4a files,     ┌────────────┬────────────┬────────────┐
@@ -47,7 +47,8 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
   `AVAudioPlayer`s synced via
   `deviceCurrentTime`), `WaveformGenerator` (background amplitude envelope for
   the player UI), `AudioImportService` (read-only source import and portable
-  AAC/M4A normalization).
+  AAC/M4A normalization), and `ExternalAudioDropReceiver` (copies promised
+  drag-and-drop files before their temporary representation expires).
 - **STT/** — provider abstraction with `NativeTranscriber`
   (`SpeechAnalyzer`/`SpeechTranscriber`, default and on-device) or opt-in
   `DeepgramTranscriber` (Nova-3 WebSocket, continuous mono PCM16 resampling,
@@ -79,6 +80,8 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
   `HotkeyManager` (global ⌥Space show/hide), `SessionBrief` (+ `BriefStore`),
   reusable `BriefProfile`s, `SessionRecord` (+ notes, review, takeaways and generated artifacts),
   `SessionArchive`/`SessionStore` (portable JSON + Markdown history persistence),
+  `ExternalAudioInbox` (atomic App Group handoff shared with the audio-only
+  Share Extension), `ImportMeetingAudioIntent` (Shortcuts ingress),
   `SessionKnowledgeIndex` (weighted local full-archive search),
   `LiveHealthMonitor`/`SessionIntegrityReport` metadata-only health policies, `Types`.
 - **Views/** — glance-first SwiftUI: `HeaderBar` with live channel meters,
@@ -119,11 +122,14 @@ transcript seeking to the audio clock. Legacy `.caf` and Application Support
 JSON/audio are still discovered and played back during migration. Deleting a session removes
 its complete directory and any legacy counterpart.
 
-Audio files and best-effort read-only Voice Memos discovery create passive
-`SessionOrigin.audioFile`/`.voiceMemo` records in the same archive. The selected
-STT provider transcribes them before the normal review lane extracts minutes and
-actions. The sidebar's local knowledge index searches every durable memory field
-with date and session-type filters ([ADR 0026](adr/0026-imported-audio-and-local-knowledge-search.md)).
+Audio arriving through the file picker, document-open, drag-and-drop, Shortcuts
+or **Voice Memos → Share → CueMe** creates a passive imported record in the same
+archive. Public handoffs converge on an atomic shared inbox; CueMe never scans
+Apple's private Voice Memos library. The selected STT provider transcribes the
+recording before the normal review lane extracts minutes and actions. The
+sidebar's local knowledge index searches every durable memory field with date
+and session-type filters ([ADR 0026](adr/0026-imported-audio-and-local-knowledge-search.md),
+[ADR 0027](adr/0027-supported-external-audio-ingress.md)).
 
 ## Runtime & hosting
 
@@ -165,7 +171,8 @@ to Nova-3. Translation remains on-device in either configuration.
   in-app playback.
 - Permissions: Microphone (required) and Screen & System Audio Recording
   (optional, for the other party). Non-sandboxed dev build; hardened runtime on;
-  stable `DEVELOPMENT_TEAM` signing so TCC grants persist across builds.
+  stable `DEVELOPMENT_TEAM` signing so TCC grants persist across builds. The
+  Share Extension uses the same signing team and App Group as the main app.
 
 ## Related docs
 

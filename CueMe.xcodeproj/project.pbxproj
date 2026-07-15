@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		CC0000000000000000000001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = CC0000000000000000000003 /* Sparkle */; };
+		DD0000000000000000000005 /* CueMeShare.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000002 /* CueMeShare.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -18,11 +19,33 @@
 			remoteGlobalIDString = AA0000000000000000000005;
 			remoteInfo = CueMe;
 		};
+		DD000000000000000000000E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DD000000000000000000000A;
+			remoteInfo = CueMeShare;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		DD0000000000000000000006 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				DD0000000000000000000005 /* CueMeShare.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		AA0000000000000000000006 /* CueMe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CueMe.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB0000000000000000000001 /* CueMeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CueMeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DD0000000000000000000002 /* CueMeShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CueMeShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -32,6 +55,13 @@
 				Info.plist,
 			);
 			target = AA0000000000000000000005 /* CueMe */;
+		};
+		DD0000000000000000000004 /* Exceptions for "CueMeShare" folder in "CueMeShare" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = DD000000000000000000000A /* CueMeShare */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -47,6 +77,19 @@
 		BB0000000000000000000002 /* CueMeTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = CueMeTests;
+			sourceTree = "<group>";
+		};
+		DD0000000000000000000001 /* CueMeShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = CueMeShared;
+			sourceTree = "<group>";
+		};
+		DD0000000000000000000003 /* CueMeShare */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				DD0000000000000000000004 /* Exceptions for "CueMeShare" folder in "CueMeShare" target */,
+			);
+			path = CueMeShare;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -67,6 +110,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DD0000000000000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -74,6 +124,8 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000004 /* CueMe */,
+				DD0000000000000000000001 /* CueMeShared */,
+				DD0000000000000000000003 /* CueMeShare */,
 				BB0000000000000000000002 /* CueMeTests */,
 				AA0000000000000000000003 /* Products */,
 			);
@@ -83,6 +135,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000006 /* CueMe.app */,
+				DD0000000000000000000002 /* CueMeShare.appex */,
 				BB0000000000000000000001 /* CueMeTests.xctest */,
 			);
 			name = Products;
@@ -98,13 +151,16 @@
 				AA0000000000000000000007 /* Sources */,
 				AA0000000000000000000008 /* Frameworks */,
 				AA0000000000000000000009 /* Resources */,
+				DD0000000000000000000006 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				DD000000000000000000000F /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				AA0000000000000000000004 /* CueMe */,
+				DD0000000000000000000001 /* CueMeShared */,
 			);
 			name = CueMe;
 			productName = CueMe;
@@ -113,6 +169,27 @@
 			);
 			productReference = AA0000000000000000000006 /* CueMe.app */;
 			productType = "com.apple.product-type.application";
+		};
+		DD000000000000000000000A /* CueMeShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DD000000000000000000000B /* Build configuration list for PBXNativeTarget "CueMeShare" */;
+			buildPhases = (
+				DD0000000000000000000008 /* Sources */,
+				DD0000000000000000000007 /* Frameworks */,
+				DD0000000000000000000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				DD0000000000000000000003 /* CueMeShare */,
+				DD0000000000000000000001 /* CueMeShared */,
+			);
+			name = CueMeShare;
+			productName = CueMeShare;
+			productReference = DD0000000000000000000002 /* CueMeShare.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		BB0000000000000000000006 /* CueMeTests */ = {
 			isa = PBXNativeTarget;
@@ -152,6 +229,9 @@
 						CreatedOnToolsVersion = 26.3;
 						TestTargetID = AA0000000000000000000005;
 					};
+					DD000000000000000000000A = {
+						CreatedOnToolsVersion = 26.3;
+					};
 				};
 			};
 			buildConfigurationList = AA000000000000000000000A /* Build configuration list for PBXProject "CueMe" */;
@@ -172,6 +252,7 @@
 			projectRoot = "";
 			targets = (
 				AA0000000000000000000005 /* CueMe */,
+				DD000000000000000000000A /* CueMeShare */,
 				BB0000000000000000000006 /* CueMeTests */,
 			);
 		};
@@ -186,6 +267,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		BB0000000000000000000004 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DD0000000000000000000009 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -209,6 +297,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DD0000000000000000000008 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -216,6 +311,11 @@
 			isa = PBXTargetDependency;
 			target = AA0000000000000000000005 /* CueMe */;
 			targetProxy = BB0000000000000000000007 /* PBXContainerItemProxy */;
+		};
+		DD000000000000000000000F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DD000000000000000000000A /* CueMeShare */;
+			targetProxy = DD000000000000000000000E /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -374,6 +474,56 @@
 			};
 			name = Release;
 		};
+		DD000000000000000000000C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = CueMeShare/CueMeShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 0.10.0; // x-release-please-version
+				DEVELOPMENT_TEAM = C8D46BZNT3;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CueMeShare/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.10.0; // x-release-please-version
+				PRODUCT_BUNDLE_IDENTIFIER = com.feliperun.CueMe.Share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		DD000000000000000000000D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = CueMeShare/CueMeShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 0.10.0; // x-release-please-version
+				DEVELOPMENT_TEAM = C8D46BZNT3;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CueMeShare/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.10.0; // x-release-please-version
+				PRODUCT_BUNDLE_IDENTIFIER = com.feliperun.CueMe.Share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -400,6 +550,15 @@
 			buildConfigurations = (
 				BB000000000000000000000A /* Debug */,
 				BB000000000000000000000B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DD000000000000000000000B /* Build configuration list for PBXNativeTarget "CueMeShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DD000000000000000000000C /* Debug */,
+				DD000000000000000000000D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

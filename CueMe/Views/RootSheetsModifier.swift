@@ -11,8 +11,5 @@ struct RootSheetsModifier: ViewModifier {
             .sheet(isPresented: $app.showPreflight) {
                 PreflightView()
             }
-            .sheet(isPresented: $app.showVoiceMemoImporter) {
-                VoiceMemoImportView()
-            }
     }
 }

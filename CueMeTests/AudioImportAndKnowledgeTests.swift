@@ -161,19 +161,71 @@ final class AudioImportAndKnowledgeTests: XCTestCase {
         XCTAssertTrue(record.coachCards.isEmpty)
     }
 
-    func testVoiceMemoDiscoveryOnlyReturnsSupportedAudioFiles() throws {
+    func testExternalAudioInboxAcceptsPortableAudioAndRejectsOtherFiles() {
+        XCTAssertTrue(ExternalAudioInbox.isSupported(filename: "Voice Memo.m4a"))
+        XCTAssertTrue(ExternalAudioInbox.isSupported(filename: "interview.WAV"))
+        XCTAssertTrue(ExternalAudioInbox.isSupported(filename: "meeting.mp3"))
+        XCTAssertFalse(ExternalAudioInbox.isSupported(filename: "Voice Memos.sqlite"))
+        XCTAssertFalse(ExternalAudioInbox.isSupported(filename: "notes.pdf"))
+    }
+
+    func testExternalAudioInboxQueuesAtomicallyAndPreservesDisplayName() throws {
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("CueMeVoiceMemoTests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("CueMeExternalInboxTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        for name in ["one.m4a", "two.wav", "database.sqlite", "cover.jpg"] {
-            FileManager.default.createFile(atPath: directory.appendingPathComponent(name).path, contents: Data())
+        ExternalAudioInbox.rootOverride = directory
+        defer {
+            ExternalAudioInbox.rootOverride = nil
+            try? FileManager.default.removeItem(at: directory)
         }
 
-        XCTAssertEqual(
-            VoiceMemoLibrary.audioURLs(in: [directory]).map(\.lastPathComponent).sorted(),
-            ["one.m4a", "two.wav"]
+        let queued = try ExternalAudioInbox.enqueue(
+            data: Data("audio".utf8),
+            filename: "Planejamento: Q3.m4a"
         )
+
+        XCTAssertEqual(
+            ExternalAudioInbox.pendingURLs().map { $0.resolvingSymlinksInPath() },
+            [queued.resolvingSymlinksInPath()]
+        )
+        XCTAssertEqual(ExternalAudioInbox.displayName(for: queued), "Planejamento Q3")
+        XCTAssertEqual(queued.pathExtension, "m4a")
+        XCTAssertFalse(queued.lastPathComponent.contains(":"))
+
+        ExternalAudioInbox.remove(queued)
+        XCTAssertTrue(ExternalAudioInbox.pendingURLs().isEmpty)
+    }
+
+    func testExternalAudioInboxRefusesUnsupportedPayloads() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CueMeExternalInboxReject-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        ExternalAudioInbox.rootOverride = directory
+        defer {
+            ExternalAudioInbox.rootOverride = nil
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        XCTAssertThrowsError(try ExternalAudioInbox.enqueue(data: Data(), filename: "database.sqlite"))
+        XCTAssertTrue(ExternalAudioInbox.pendingURLs().isEmpty)
+    }
+
+    func testExternalAudioInboxFallsBackToSourceExtensionForPromisedFiles() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CueMeExternalInboxPromised-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        ExternalAudioInbox.rootOverride = directory
+        defer {
+            ExternalAudioInbox.rootOverride = nil
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let source = directory.appendingPathComponent("temporary.m4a")
+        try Data("audio".utf8).write(to: source)
+
+        let queued = try ExternalAudioInbox.enqueueCopy(from: source, filename: "Daily stand-up")
+
+        XCTAssertEqual(queued.pathExtension, "m4a")
+        XCTAssertEqual(ExternalAudioInbox.displayName(for: queued), "Daily stand-up")
     }
 
     func testAudioImportConvertsWAVToAACM4A() async throws {

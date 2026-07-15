@@ -45,7 +45,8 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
    typed JSON, mandatory human-readable Markdown and synchronized audio. Notes,
    takeaways and generated artifacts rewrite both state representations.
    `SessionOrigin` records whether memory came from live capture, an audio file
-   or Voice Memos; imported sources never persist their original absolute path.
+   or a Voice Memos share; imported sources never persist their original absolute
+   path. Public external handoffs converge on an atomic `ExternalAudioInbox`.
 8. **Views** (`Views/`) — SwiftUI only. Reads `AppModel`/`SessionRecord`, calls
    `AppModel` command methods, never touches `SessionCoordinator` or the audio
    layer directly.
@@ -65,6 +66,7 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 | Word-class tagging | `NaturalLanguage`/`NLTagger` in `Highlighter` | On-device; tiers translated text for fast scanning. |
 | Audio playback | Two `AVAudioPlayer`s in `MeetingPlayer` | Synced via a shared `deviceCurrentTime` anchor, not a mixer graph. |
 | Imported audio | `AudioImportService` + `PrerecordedAudioTranscriber` | Read-only source; normalized M4A; native file STT or Deepgram batch. |
+| External audio handoff | `CueMeShare` + `ImportMeetingAudioIntent` + `ExternalAudioInbox` | Audio-only Share Extension, Shortcuts, document-open and drop; no private Voice Memos scan. |
 | CV import | `PDFKit` in `BriefEditor` | Extracts text from a pasted/imported résumé. |
 | Persistence | `FileManager` + `JSONEncoder`/`Decoder` in `SessionStore`/`BriefStore`/`MeetingContextStore` | User-selectable session archive; briefs, reusable contexts and glossary cache in Application Support. |
 | Packaging | `xcodebuild` + `hdiutil` in `scripts/package.sh` | Local only — see [Getting Started](GETTING-STARTED.md) and [Packaging](PACKAGING.md). |
@@ -111,6 +113,9 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 - **Imported audio is passive session memory.** It has an explicit non-live
   `SessionOrigin`, no Coach cards and no Coach workspace. The original source is
   read-only; the archive owns a portable M4A copy ([ADR 0026](adr/0026-imported-audio-and-local-knowledge-search.md)).
+- **Voice Memos integration uses public handoff surfaces only.** Share Extension,
+  Shortcuts, document-open and drag-and-drop converge on an atomic inbox; no code
+  enumerates Apple's private library ([ADR 0027](adr/0027-supported-external-audio-ingress.md)).
 - **Knowledge search never calls an external service.** The in-memory index is
   rebuilt from durable `SessionRecord` fields and applies date/type filters
   before lexical scoring. Selecting Deepgram for import affects transcription,
