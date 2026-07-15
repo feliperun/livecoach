@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.0](https://github.com/feliperun/cueme/compare/v0.14.0...v1.0.0) (2026-07-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* CueMe becomes a file-first second brain centered on Markdown notes, projects, labels, attachments, semantic memory, and meeting intelligence.
+
+### Features
+
+* turn CueMe into a file-first personal second brain ([a3933c0](https://github.com/feliperun/cueme/commit/a3933c048cf8c8521b2212642bb96376b496fd47))
+
+
+### Bug Fixes
+
+* preserve macOS capture permissions ([800ff6e](https://github.com/feliperun/cueme/commit/800ff6e7dbd947c2de061efbb4f1dc8d7d80fdb0))
+* preserve macOS capture permissions ([497635d](https://github.com/feliperun/cueme/commit/497635d4904807052a0a671c3411cdfe0e0fc85f))
+
 ## [0.14.0](https://github.com/feliperun/cueme/compare/v0.11.0...v0.14.0) (2026-07-15)
 
 
