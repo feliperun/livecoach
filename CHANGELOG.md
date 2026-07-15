@@ -5,7 +5,6 @@
 
 ### Features
 
-* add supported Voice Memos sharing ([c7b14bb](https://github.com/feliperun/cueme/commit/c7b14bb5a2d0aa15a6601fad6f96035e26614f00))
 * add supported Voice Memos sharing ([9f510d3](https://github.com/feliperun/cueme/commit/9f510d3cb6bc424472827ae34bc83b09b65781d7))
 
 ## [0.10.0](https://github.com/feliperun/cueme/compare/v0.9.1...v0.10.0) (2026-07-15)
