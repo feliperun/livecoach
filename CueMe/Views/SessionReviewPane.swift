@@ -3,6 +3,7 @@ import SwiftUI
 struct SessionReviewPane: View {
     @Environment(AppModel.self) private var app
     let record: SessionRecord
+    let player: MeetingPlayer
 
     var body: some View {
         ScrollView {
@@ -11,9 +12,9 @@ struct SessionReviewPane: View {
                 SessionIntegrityCard(record: record)
                 EditableOverview(record: record)
                 topics
-                EditableTakeawaysSection(record: record)
-                ReviewItemsSection(record: record, openQuestion: false)
-                ReviewItemsSection(record: record, openQuestion: true)
+                EditableTakeawaysSection(record: record, player: player)
+                ReviewItemsSection(record: record, player: player, openQuestion: false)
+                ReviewItemsSection(record: record, player: player, openQuestion: true)
                 EditableFollowUp(record: record)
                 generationActions
                 if let error = app.postProcessingError {
@@ -180,7 +181,14 @@ struct EditableTakeawayRow: View {
     @Environment(AppModel.self) private var app
     let sessionID: UUID
     let item: SessionTakeaway
+    let player: MeetingPlayer?
     @State private var draft = ""
+
+    init(sessionID: UUID, item: SessionTakeaway, player: MeetingPlayer? = nil) {
+        self.sessionID = sessionID
+        self.item = item
+        self.player = player
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -191,6 +199,7 @@ struct EditableTakeawayRow: View {
             TextField("Ação", text: $draft, axis: .vertical)
                 .textFieldStyle(.plain).font(.system(size: 12))
                 .strikethrough(item.isDone).onSubmit(save)
+            EvidenceButton(ownerID: item.id, evidence: item.evidence, player: player)
             Button(action: save) { Image(systemName: "checkmark") }
             Button(role: .destructive) {
                 app.deleteTakeaway(sessionID: sessionID, takeawayID: item.id)
@@ -207,10 +216,11 @@ struct EditableTakeawayRow: View {
 
 private struct EditableTakeawaysSection: View {
     let record: SessionRecord
+    let player: MeetingPlayer
     var body: some View {
         ReviewSection(title: "AÇÕES", icon: "checklist") {
             if record.takeaways.isEmpty { ReviewEmptyRow(text: "Nenhuma ação pendente") }
-            ForEach(record.takeaways) { EditableTakeawayRow(sessionID: record.id, item: $0) }
+            ForEach(record.takeaways) { EditableTakeawayRow(sessionID: record.id, item: $0, player: player) }
         }
     }
 }
@@ -218,6 +228,7 @@ private struct EditableTakeawaysSection: View {
 private struct ReviewItemsSection: View {
     @Environment(AppModel.self) private var app
     let record: SessionRecord
+    let player: MeetingPlayer
     let openQuestion: Bool
     @State private var newItem = ""
 
@@ -237,6 +248,7 @@ private struct ReviewItemsSection: View {
                 EditableReviewItemRow(
                     sessionID: record.id,
                     item: item,
+                    player: player,
                     openQuestion: openQuestion
                 )
             }
@@ -260,6 +272,7 @@ private struct EditableReviewItemRow: View {
     @Environment(AppModel.self) private var app
     let sessionID: UUID
     let item: MeetingReviewItem
+    let player: MeetingPlayer
     let openQuestion: Bool
     @State private var draft = ""
 
@@ -269,6 +282,8 @@ private struct EditableReviewItemRow: View {
                 .font(.system(size: 9, weight: .bold)).foregroundStyle(openQuestion ? Theme.amber : Theme.mint)
             TextField("Item", text: $draft, axis: .vertical)
                 .textFieldStyle(.plain).font(.system(size: 12)).onSubmit(save)
+                .accessibilityIdentifier("review.item.\(item.id.uuidString)")
+            EvidenceButton(ownerID: item.id, evidence: item.evidence, player: player)
             Button(action: save) { Image(systemName: "checkmark") }
             Button(role: .destructive) {
                 app.deleteReviewItem(sessionID: sessionID, itemID: item.id, openQuestion: openQuestion)
@@ -285,6 +300,28 @@ private struct EditableReviewItemRow: View {
             app.updateReviewQuestion(sessionID: sessionID, itemID: item.id, text: draft)
         } else {
             app.updateReviewDecision(sessionID: sessionID, itemID: item.id, text: draft)
+        }
+    }
+}
+
+private struct EvidenceButton: View {
+    let ownerID: UUID
+    let evidence: [MemoryEvidence]
+    let player: MeetingPlayer?
+
+    var body: some View {
+        if let first = evidence.first {
+            Button {
+                player?.seek(to: first.timestamp)
+                if player?.isPlaying == false { player?.play() }
+            } label: {
+                Label("\(evidence.count)", systemImage: "quote.bubble")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .buttonStyle(.borderless)
+            .accessibilityIdentifier("evidence.\(ownerID.uuidString)")
+            .accessibilityValue(SessionArchive.clock(first.timestamp))
+            .help(first.quote)
         }
     }
 }

@@ -46,7 +46,7 @@ struct SessionWorkspacePane: View {
     @ViewBuilder
     var body: some View {
         switch selection {
-        case .review: SessionReviewPane(record: record)
+        case .review: SessionReviewPane(record: record, player: player)
         case .coach: SessionCoachPane(record: record)
         case .summary: SessionSummaryPane(record: record)
         case .transcript: SessionTranscriptPane(record: record, player: player)

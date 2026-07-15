@@ -132,6 +132,7 @@ struct SessionSidebar: View {
                 TextField("Buscar assuntos e decisões", text: Binding(
                     get: { app.historySearch }, set: { app.historySearch = $0 }
                 ))
+                .accessibilityIdentifier("memory.search")
                 .textFieldStyle(.plain).font(.system(size: 10.5))
                 if !app.historySearch.isEmpty {
                     Button { app.historySearch = "" } label: { Image(systemName: "xmark.circle.fill") }
@@ -141,6 +142,27 @@ struct SessionSidebar: View {
             .padding(.horizontal, 9).frame(height: 30)
             .background(Theme.panelRaised, in: RoundedRectangle(cornerRadius: 9))
             .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.divider))
+            if !app.historySearch.isEmpty {
+                Button {
+                    app.askGlobalMemory()
+                } label: {
+                    Label(app.globalMemoryAnswering ? "Consultando…" : "Perguntar à memória", systemImage: "sparkles")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered).controlSize(.small)
+                .accessibilityIdentifier("memory.ask")
+                .disabled(app.globalMemoryAnswering)
+                if let answer = app.globalMemoryAnswer {
+                    ScrollView {
+                        Text(.init(answer)).font(.system(size: 10.5)).textSelection(.enabled)
+                            .accessibilityIdentifier("memory.answer")
+                            .accessibilityValue(answer)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 150).padding(8)
+                    .background(Theme.panelRaised, in: RoundedRectangle(cornerRadius: 9))
+                }
+            }
             HStack(spacing: 6) {
                 filterMenu(
                     title: app.historyDateFilter.label,
@@ -253,6 +275,7 @@ struct SessionSidebar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("session.\(record.id.uuidString)")
         .animation(.snappy(duration: 0.18), value: app.selectedSessionID)
         .contextMenu {
             Button("Apagar", systemImage: "trash", role: .destructive) { app.deleteHistory(record.id) }

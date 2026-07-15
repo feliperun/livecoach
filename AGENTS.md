@@ -60,6 +60,27 @@ Red → Green → Refactor → Commit.
 
 **Test quality:** Isolated · Deterministic · Fast · Behavioral. Fix flaky tests first.
 
+### End-to-end tests (mandatory for key features)
+
+Any key feature or user-visible change to a primary workflow must add or update
+an XCTest UI scenario in `CueMeUITests`. Unit tests remain mandatory for logic,
+but do not replace an E2E regression test. Key workflows include capture,
+recording, STT, playback, memory/search/embeddings, persistence, evidence,
+projects/people, Coach/AI generation, import/export, privacy and failover.
+
+Before declaring work complete, the agent must run both suites explicitly:
+
+```bash
+xcodebuild -project CueMe.xcodeproj -scheme CueMe -destination 'platform=macOS' -skip-testing:CueMeUITests test
+xcodebuild -project CueMe.xcodeproj -scheme CueMe -destination 'platform=macOS' -only-testing:CueMeUITests test
+```
+
+E2E fixtures must be synthetic, deterministic and isolated from the user's
+archive, Keychain, network providers and production SQLite database. Use stable
+accessibility identifiers; never use sleeps. An exception is allowed only for
+docs, formatting or behavior-preserving internal refactors and must be stated in
+the PR. See [ADR 0029](docs/adr/0029-key-feature-e2e-regression-gate.md).
+
 ### Check suite (runs on every push / PR)
 
 ```bash
@@ -142,6 +163,7 @@ After a structural change, update `docs/ARCHITECTURE.md` and/or `docs/ABSTRACTIO
 - [ ] `xcodebuild -project CueMe.xcodeproj -scheme CueMe -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO` passes locally.
 - [ ] `sentrux check .` passes; `sentrux gate .` shows no degradation on touched files.
 - [ ] CI is green on the PR.
+- [ ] Key user-visible behavior has a deterministic `CueMeUITests` regression and the UI E2E check is green.
 - [ ] No secrets, tokens, or internal URLs in the diff.
 - [ ] If a structural decision was made: ADR exists and `docs/adr/README.md` index is updated.
 - [ ] Conventional Commit title.

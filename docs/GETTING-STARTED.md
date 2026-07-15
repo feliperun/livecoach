@@ -45,6 +45,16 @@ GitHub CI repeats the build and XCTest suite on a `macos-26` runner, then runs
 the Sentrux structural gates. Keep the local checks as the fast feedback path
 before pushing. See [AGENTS.md § CueMe-specific gotchas](../AGENTS.md#3b-cueme-specific-gotchas-hard-won--dont-re-learn-these).
 
+Run only the end-to-end macOS UI suite with:
+
+```bash
+xcodebuild -project CueMe.xcodeproj -scheme CueMe -destination 'platform=macOS' -only-testing:CueMeUITests test
+```
+
+The first local run may require macOS authorization for Xcode UI automation.
+The app uses deterministic fixtures and a temporary SQLite database in this
+mode, so the user's CueMe archive is not modified.
+
 The opt-in Deepgram live smoke test uses a synthetic PCM16 WAVE file and an
 environment-provided key:
 

@@ -14,6 +14,7 @@ struct LiveNoteButton: View {
             .frame(minWidth: 27, minHeight: 24)
         }
         .buttonStyle(.plain).help("Anotar agora")
+        .accessibilityIdentifier("live.note")
         .popover(isPresented: $showing) { LiveNotesPopover() }
     }
 }
@@ -26,9 +27,11 @@ private struct LiveNotesPopover: View {
         VStack(spacing: 8) {
             HStack(spacing: 7) {
                 TextField("Anotação neste momento…", text: $app.noteDraft)
+                    .accessibilityIdentifier("live.note.input")
                     .textFieldStyle(.plain).font(.system(size: 11.5)).onSubmit(app.addLiveNote)
                 Button(action: app.addLiveNote) { Image(systemName: "arrow.up.circle.fill") }
                     .buttonStyle(.plain).foregroundStyle(Theme.violet)
+                    .accessibilityIdentifier("live.note.submit")
             }
             .padding(9).background(Theme.interactive, in: RoundedRectangle(cornerRadius: 9))
             ScrollView {
@@ -106,4 +109,3 @@ struct LiveDetailsButton: View {
         .padding(9).background(Theme.interactive, in: RoundedRectangle(cornerRadius: 9))
     }
 }
-

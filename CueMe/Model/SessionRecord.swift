@@ -19,10 +19,12 @@ enum SessionOrigin: String, Codable, CaseIterable, Sendable, Identifiable {
 
 /// Snapshot de uma sessão terminada (treino ou conversa real), para o histórico.
 struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
+    static let currentSchemaVersion = 3
     static func == (l: SessionRecord, r: SessionRecord) -> Bool { l.id == r.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
     let id: UUID
+    var schemaVersion: Int
     var startedAt: Date
     var recordingStartedAt: Date?
     var endedAt: Date
@@ -50,9 +52,12 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
     var displayTitle: String?
     var review: MeetingReview
     var artifacts: [SessionArtifact]
+    var projectID: UUID?
+    var personIDs: [UUID]
 
     init(
         id: UUID = UUID(),
+        schemaVersion: Int = SessionRecord.currentSchemaVersion,
         startedAt: Date,
         recordingStartedAt: Date? = nil,
         endedAt: Date = Date(),
@@ -79,9 +84,12 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         origin: SessionOrigin = .live,
         displayTitle: String? = nil,
         review: MeetingReview = .empty,
-        artifacts: [SessionArtifact] = []
+        artifacts: [SessionArtifact] = [],
+        projectID: UUID? = nil,
+        personIDs: [UUID] = []
     ) {
         self.id = id
+        self.schemaVersion = schemaVersion
         self.startedAt = startedAt
         self.recordingStartedAt = recordingStartedAt
         self.endedAt = endedAt
@@ -109,12 +117,15 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         self.displayTitle = displayTitle
         self.review = review
         self.artifacts = artifacts
+        self.projectID = projectID
+        self.personIDs = personIDs
     }
 
     /// Decode tolerante: sessões salvas antes do gravador não têm hasAudio/audioDuration.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
+        schemaVersion = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         startedAt = try c.decode(Date.self, forKey: .startedAt)
         recordingStartedAt = try c.decodeIfPresent(Date.self, forKey: .recordingStartedAt)
         endedAt = try c.decode(Date.self, forKey: .endedAt)
@@ -145,6 +156,8 @@ struct SessionRecord: Codable, Identifiable, Sendable, Hashable {
         displayTitle = try c.decodeIfPresent(String.self, forKey: .displayTitle)
         review = try c.decodeIfPresent(MeetingReview.self, forKey: .review) ?? .empty
         artifacts = try c.decodeIfPresent([SessionArtifact].self, forKey: .artifacts) ?? []
+        projectID = try c.decodeIfPresent(UUID.self, forKey: .projectID)
+        personIDs = try c.decodeIfPresent([UUID].self, forKey: .personIDs) ?? []
     }
 
     var duration: TimeInterval { max(0, endedAt.timeIntervalSince(startedAt)) }

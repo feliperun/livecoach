@@ -26,6 +26,13 @@
 			remoteGlobalIDString = DD000000000000000000000A;
 			remoteInfo = CueMeShare;
 		};
+		EE0000000000000000000007 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA0000000000000000000005;
+			remoteInfo = CueMe;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -46,6 +53,7 @@
 		AA0000000000000000000006 /* CueMe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CueMe.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB0000000000000000000001 /* CueMeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CueMeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DD0000000000000000000002 /* CueMeShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CueMeShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		EE0000000000000000000001 /* CueMeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CueMeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -92,6 +100,11 @@
 			path = CueMeShare;
 			sourceTree = "<group>";
 		};
+		EE0000000000000000000002 /* CueMeUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = CueMeUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -117,6 +130,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		EE0000000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -127,6 +147,7 @@
 				DD0000000000000000000001 /* CueMeShared */,
 				DD0000000000000000000003 /* CueMeShare */,
 				BB0000000000000000000002 /* CueMeTests */,
+				EE0000000000000000000002 /* CueMeUITests */,
 				AA0000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -137,6 +158,7 @@
 				AA0000000000000000000006 /* CueMe.app */,
 				DD0000000000000000000002 /* CueMeShare.appex */,
 				BB0000000000000000000001 /* CueMeTests.xctest */,
+				EE0000000000000000000001 /* CueMeUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -212,6 +234,27 @@
 			productReference = BB0000000000000000000001 /* CueMeTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		EE0000000000000000000006 /* CueMeUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EE0000000000000000000009 /* Build configuration list for PBXNativeTarget "CueMeUITests" */;
+			buildPhases = (
+				EE0000000000000000000005 /* Sources */,
+				EE0000000000000000000003 /* Frameworks */,
+				EE0000000000000000000004 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				EE0000000000000000000008 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				EE0000000000000000000002 /* CueMeUITests */,
+			);
+			name = CueMeUITests;
+			productName = CueMeUITests;
+			productReference = EE0000000000000000000001 /* CueMeUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -231,6 +274,10 @@
 					};
 					DD000000000000000000000A = {
 						CreatedOnToolsVersion = 26.3;
+					};
+					EE0000000000000000000006 = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = AA0000000000000000000005;
 					};
 				};
 			};
@@ -254,6 +301,7 @@
 				AA0000000000000000000005 /* CueMe */,
 				DD000000000000000000000A /* CueMeShare */,
 				BB0000000000000000000006 /* CueMeTests */,
+				EE0000000000000000000006 /* CueMeUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -274,6 +322,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		DD0000000000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EE0000000000000000000004 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -304,6 +359,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		EE0000000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -316,6 +378,11 @@
 			isa = PBXTargetDependency;
 			target = DD000000000000000000000A /* CueMeShare */;
 			targetProxy = DD000000000000000000000E /* PBXContainerItemProxy */;
+		};
+		EE0000000000000000000008 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AA0000000000000000000005 /* CueMe */;
+			targetProxy = EE0000000000000000000007 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -524,6 +591,34 @@
 			};
 			name = Release;
 		};
+		EE000000000000000000000A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = C8D46BZNT3;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.feliperun.CueMeUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = CueMe;
+			};
+			name = Debug;
+		};
+		EE000000000000000000000B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = C8D46BZNT3;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.feliperun.CueMeUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = CueMe;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -559,6 +654,15 @@
 			buildConfigurations = (
 				DD000000000000000000000C /* Debug */,
 				DD000000000000000000000D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		EE0000000000000000000009 /* Build configuration list for PBXNativeTarget "CueMeUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EE000000000000000000000A /* Debug */,
+				EE000000000000000000000B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

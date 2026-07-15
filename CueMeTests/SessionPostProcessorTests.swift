@@ -9,7 +9,7 @@ final class SessionPostProcessorTests: XCTestCase {
         3. Marcar o próximo encontro
         """
 
-        let items = SessionPostProcessor.parseTakeaways(output)
+        let items = SessionReviewParser.parseTakeaways(output)
 
         XCTAssertEqual(items.map(\.text), [
             "Enviar proposta até sexta",
@@ -58,7 +58,7 @@ final class SessionPostProcessorTests: XCTestCase {
         }
         """
 
-        let parsed = SessionPostProcessor.parseReview(output, preserving: .empty)
+        let parsed = SessionReviewParser.parseReview(output, preserving: .empty)
 
         XCTAssertEqual(parsed?.minutes.overview, "O time alinhou a entrega em etapas.")
         XCTAssertEqual(parsed?.minutes.topics.first?.title, "Migração")

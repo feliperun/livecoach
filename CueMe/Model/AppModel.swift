@@ -108,9 +108,13 @@ final class AppModel {
 
     // Histórico de sessões e índice local pré-normalizado para busca instantânea.
     @ObservationIgnored private var knowledgeIndex = SessionKnowledgeIndex()
+    @ObservationIgnored private let semanticMemoryIndex = SemanticMemoryIndex.shared
     var history: [SessionRecord] = [] {
         didSet { knowledgeIndex.rebuild(history) }
     }
+    var projects: [KnowledgeProject] = []
+    var people: [KnowledgePerson] = []
+    var activeProjectID: UUID?
     var selectedSessionID: UUID?
     var sidebarCollapsed = false
     var historySearch = ""
@@ -128,6 +132,8 @@ final class AppModel {
     var postSessionPrompt = ""
     var postProcessingSessionID: UUID?
     var postProcessingError: String?
+    var globalMemoryAnswer: String?
+    var globalMemoryAnswering = false
     private var sessionStartedAt: Date?
     var sessionStartTime: Date? { sessionStartedAt }
     private(set) var currentSessionID: UUID?
@@ -137,7 +143,7 @@ final class AppModel {
     var translationConfig: TranslationSession.Configuration?
     @ObservationIgnored nonisolated let translationPipe = TranslationPipe()
     @ObservationIgnored private let updater = SPUStandardUpdaterController(
-        startingUpdater: true,
+        startingUpdater: ProcessInfo.processInfo.environment["CUEME_UI_TESTING"] != "1",
         updaterDelegate: nil,
         userDriverDelegate: nil
     )
@@ -146,7 +152,14 @@ final class AppModel {
 
     init() {
         self.brief = BriefStore.load()
+        if ProcessInfo.processInfo.environment["CUEME_UI_TESTING"] == "1" {
+            self.brief.mode = .meeting
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent("CueMeUITests-archive", isDirectory: true)
+            try? FileManager.default.removeItem(at: root)
+            SessionStore.rootOverride = root
+        }
         let isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || ProcessInfo.processInfo.environment["CUEME_UI_TESTING"] == "1"
         let hasClaude = ClaudeClient().isAvailable
         // An ad-hoc XCTest host has a different Keychain identity and macOS may
         // block waiting for an access dialog before the test bundle is loaded.
@@ -195,6 +208,16 @@ final class AppModel {
         }
         self.history = SessionStore.loadAll()
         self.knowledgeIndex.rebuild(history)
+        let entities = KnowledgeEntityStore.load()
+        self.projects = entities.projects
+        self.people = entities.people
+        if ProcessInfo.processInfo.environment["CUEME_UI_TESTING"] == "1" {
+            let fixture = UITestFixtures.memory
+            self.history = fixture.records
+            self.projects = fixture.projects
+            self.people = fixture.people
+            self.knowledgeIndex.rebuild(history)
+        }
         self.profiles = BriefProfileStore.load()
         self.contexts = MeetingContextStore.load()
         let availableIDs = Set(contexts.map(\.id))
@@ -269,11 +292,16 @@ final class AppModel {
     }
 
     var historySearchResults: [SessionSearchResult] {
-        knowledgeIndex.search(
+        let hybrid = semanticMemoryIndex.search(
             query: historySearch,
             date: historyDateFilter,
-            type: historyTypeFilter
+            type: historyTypeFilter,
+            records: history
         )
+        if !hybrid.isEmpty || historySearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return hybrid
+        }
+        return knowledgeIndex.search(query: historySearch, date: historyDateFilter, type: historyTypeFilter)
     }
 
     var filteredHistory: [SessionRecord] {
@@ -289,6 +317,10 @@ final class AppModel {
     // MARK: - Comandos
 
     func start() {
+        if ProcessInfo.processInfo.environment["CUEME_UI_TESTING"] == "1" {
+            beginUITestLiveSession()
+            return
+        }
         guard !isSessionBusy,
               audioImportStatus?.isActive != true,
               glossaryGenerationState != .generating else { return }
@@ -358,6 +390,13 @@ final class AppModel {
     }
 
     func stop() {
+        if ProcessInfo.processInfo.environment["CUEME_UI_TESTING"] == "1", sessionStartedAt != nil {
+            sessionState = .stopping
+            saveSessionRecord(stopResult: .init(audioDuration: 75, recordingStartedAt: sessionStartedAt))
+            activeCoachCardID = nil
+            sessionState = .idle
+            return
+        }
         guard sessionState != .stopping else { return }
         let coord = coordinator
         guard coord != nil else {
@@ -373,6 +412,33 @@ final class AppModel {
             self.sessionState = .idle
             await self.consumeExternalAudioInbox()
         }
+    }
+
+    private func beginUITestLiveSession() {
+        let now = Date()
+        let questionID = UUID(uuidString: "60000000-0000-0000-0000-000000000001")!
+        let coachID = UUID(uuidString: "60000000-0000-0000-0000-000000000002")!
+        transcript = [
+            .init(id: questionID, speaker: .other, text: "Como vamos reduzir o risco da entrega?", isFinal: true, ts: now),
+            .init(speaker: .self, text: "Vamos entregar em etapas menores.", isFinal: true, ts: now.addingTimeInterval(4))
+        ]
+        coachCards = [.init(
+            id: coachID, guidePT: "Explique mitigação e prazo",
+            sayNative: "Vamos dividir a entrega em marcos semanais.",
+            keytermsConversation: ["marcos", "risco"], isStreaming: false, ts: now
+        )]
+        activeCoachCardID = coachID
+        minutes = .init(overview: "A equipe discutiu riscos e entregas incrementais.")
+        sessionStartedAt = now
+        currentSessionID = UUID(uuidString: "60000000-0000-0000-0000-000000000003")!
+        sessionState = .running
+        micCaptureState = .active
+        systemCaptureState = .active
+        micLevel = 0.65
+        systemLevel = 0.55
+        coachBackendReady = true
+        selectedSessionID = nil
+        if let currentSessionID { _ = SessionStore.prepareSession(id: currentSessionID, startedAt: now) }
     }
 
     /// Encerra a sessão atual (salva no histórico) e começa uma nova, limpa.

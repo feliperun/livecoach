@@ -82,7 +82,9 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
   `SessionArchive`/`SessionStore` (portable JSON + Markdown history persistence),
   `ExternalAudioInbox` (atomic App Group handoff shared with the audio-only
   Share Extension), `ImportMeetingAudioIntent` (Shortcuts ingress),
-  `SessionKnowledgeIndex` (weighted local full-archive search),
+  `SessionKnowledgeIndex` (lexical fallback), `SemanticMemoryIndex` (rebuildable
+  SQLite projection with FTS5/BM25 and sqlite-vec), evidence-linked decisions
+  and actions, and stable `KnowledgeProject`/`KnowledgePerson` entities,
   `LiveHealthMonitor`/`SessionIntegrityReport` metadata-only health policies, `Types`.
 - **Views/** — glance-first SwiftUI: `HeaderBar` with live channel meters,
   compact `QuestionBanner`, user-controlled `CoachingPane`, compact live health,
@@ -127,9 +129,13 @@ or **Voice Memos → Share → CueMe** creates a passive imported record in the 
 archive. Public handoffs converge on an atomic shared inbox; CueMe never scans
 Apple's private Voice Memos library. The selected STT provider transcribes the
 recording before the normal review lane extracts minutes and actions. The
-sidebar's local knowledge index searches every durable memory field with date
-and session-type filters ([ADR 0026](adr/0026-imported-audio-and-local-knowledge-search.md),
-[ADR 0027](adr/0027-supported-external-audio-ingress.md)).
+sidebar's local hybrid index searches timestamped transcript, topic, decision,
+action, question, note and artifact chunks with date and session-type filters.
+JSON and Markdown remain canonical while SQLite is rebuildable; evidence links
+seek back to supporting audio, and sessions join project/person timelines
+([ADR 0026](adr/0026-imported-audio-and-local-knowledge-search.md),
+[ADR 0027](adr/0027-supported-external-audio-ingress.md),
+[ADR 0028](adr/0028-evidence-first-longitudinal-semantic-memory.md)).
 
 ## Runtime & hosting
 
@@ -148,6 +154,10 @@ to Nova-3. Translation remains on-device in either configuration.
 - XCTest target covers provider fallback, coach parsing, recording-clock
   compatibility, transcript heuristics, per-channel silence detection, provider
   failover and a deterministic virtual 60-minute soak.
+- `CueMeUITests` launches the real macOS app with isolated meeting fixtures and
+  a temporary sqlite-vec database. It exercises semantic history search,
+  evidence-backed review navigation and project timelines through the UI without
+  modifying the user's archive.
 - Logging via `OSLog` (`subsystem: "CueMe"`).
 - Releases: `release-please` (Conventional Commits → versioned CHANGELOG + GitHub
   Release on merge); `.dmg` built and attached manually via `scripts/package.sh`

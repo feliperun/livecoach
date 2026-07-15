@@ -74,3 +74,5 @@ proposed → active → superseded
 | [0025](0025-adaptive-live-experience-and-session-review.md) | Adaptive live experience and durable session review | active |
 | [0026](0026-imported-audio-and-local-knowledge-search.md) | Imported audio sessions and local knowledge search | active |
 | [0027](0027-supported-external-audio-ingress.md) | Supported external audio ingress | active |
+| [0028](0028-evidence-first-longitudinal-semantic-memory.md) | Evidence-first longitudinal memory with hybrid SQLite search | active |
+| [0029](0029-key-feature-e2e-regression-gate.md) | Key-feature E2E regression gate | active |

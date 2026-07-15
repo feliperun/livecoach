@@ -18,23 +18,85 @@ struct SessionTakeaway: Codable, Identifiable, Sendable, Hashable {
     let id: UUID
     var text: String
     var isDone: Bool
+    var evidence: [MemoryEvidence]
+    var confidence: Double?
+    var assignee: String?
+    var dueAt: Date?
+    var createdInSessionID: UUID?
     let createdAt: Date
 
-    init(id: UUID = UUID(), text: String, isDone: Bool = false, createdAt: Date = Date()) {
+    init(
+        id: UUID = UUID(), text: String, isDone: Bool = false, createdAt: Date = Date(),
+        evidence: [MemoryEvidence] = [], confidence: Double? = nil, assignee: String? = nil,
+        dueAt: Date? = nil, createdInSessionID: UUID? = nil
+    ) {
         self.id = id
         self.text = text
         self.isDone = isDone
         self.createdAt = createdAt
+        self.evidence = evidence
+        self.confidence = confidence
+        self.assignee = assignee
+        self.dueAt = dueAt
+        self.createdInSessionID = createdInSessionID
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        text = try c.decode(String.self, forKey: .text)
+        isDone = try c.decode(Bool.self, forKey: .isDone)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        evidence = try c.decodeIfPresent([MemoryEvidence].self, forKey: .evidence) ?? []
+        confidence = try c.decodeIfPresent(Double.self, forKey: .confidence)
+        assignee = try c.decodeIfPresent(String.self, forKey: .assignee)
+        dueAt = try c.decodeIfPresent(Date.self, forKey: .dueAt)
+        createdInSessionID = try c.decodeIfPresent(UUID.self, forKey: .createdInSessionID)
     }
 }
 
 struct MeetingReviewItem: Codable, Identifiable, Sendable, Hashable {
     let id: UUID
     var text: String
+    var evidence: [MemoryEvidence]
+    var confidence: Double?
+    var createdInSessionID: UUID?
+    var supersedesID: UUID?
 
-    init(id: UUID = UUID(), text: String) {
+    init(
+        id: UUID = UUID(), text: String, evidence: [MemoryEvidence] = [],
+        confidence: Double? = nil, createdInSessionID: UUID? = nil, supersedesID: UUID? = nil
+    ) {
         self.id = id
         self.text = text
+        self.evidence = evidence
+        self.confidence = confidence
+        self.createdInSessionID = createdInSessionID
+        self.supersedesID = supersedesID
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        text = try c.decode(String.self, forKey: .text)
+        evidence = try c.decodeIfPresent([MemoryEvidence].self, forKey: .evidence) ?? []
+        confidence = try c.decodeIfPresent(Double.self, forKey: .confidence)
+        createdInSessionID = try c.decodeIfPresent(UUID.self, forKey: .createdInSessionID)
+        supersedesID = try c.decodeIfPresent(UUID.self, forKey: .supersedesID)
+    }
+}
+
+struct MemoryEvidence: Codable, Sendable, Hashable, Identifiable {
+    let id: UUID
+    var turnID: UUID?
+    var timestamp: TimeInterval
+    var quote: String
+
+    init(id: UUID = UUID(), turnID: UUID? = nil, timestamp: TimeInterval, quote: String) {
+        self.id = id
+        self.turnID = turnID
+        self.timestamp = max(0, timestamp)
+        self.quote = quote
     }
 }
 

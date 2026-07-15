@@ -124,6 +124,7 @@ struct HeaderBar: View {
                 app.isRunning ? app.stop() : app.start()
             }
             .buttonStyle(PrimaryButtonStyle(danger: app.isRunning))
+            .accessibilityIdentifier("session.primary")
             .keyboardShortcut(.return, modifiers: [.command])
             .disabled(app.sessionState == .preparing || app.sessionState == .stopping)
         }

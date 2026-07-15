@@ -54,6 +54,7 @@ struct SessionTabButton: View {
             .background(selected ? Theme.violet.opacity(0.28) : .clear, in: RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("session.tab.\(item.rawValue)")
         .help(item.label)
     }
 }
@@ -164,6 +165,7 @@ struct EditableMemoryNote: View {
             .buttonStyle(.plain)
             TextField("Nota", text: $draft, axis: .vertical)
                 .textFieldStyle(.plain).font(.system(size: 12.5))
+                .accessibilityIdentifier("memory.note")
                 .onSubmit { app.updateNote(sessionID: sessionID, noteID: note.id, text: draft) }
             Button { app.updateNote(sessionID: sessionID, noteID: note.id, text: draft) } label: {
                 Image(systemName: "checkmark")

@@ -63,6 +63,12 @@ struct BriefEditor: View {
                 }
 
                 Section {
+                    Picker("Projeto", selection: $app.activeProjectID) {
+                        Text("Sem projeto").tag(UUID?.none)
+                        ForEach(app.projects.filter { !$0.archived }) { project in
+                            Text(project.name).tag(Optional(project.id))
+                        }
+                    }
                     Picker("Modo", selection: $app.brief.mode) {
                         ForEach(Mode.allCases) { Text($0.label).tag($0) }
                     }

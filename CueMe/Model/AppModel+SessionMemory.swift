@@ -68,6 +68,51 @@ extension AppModel {
         if !name.isEmpty { vocabulary.addKeyterm(name) }
     }
 
+    func createProject(named rawName: String) -> UUID? {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+        if let existing = projects.first(where: { $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame }) {
+            return existing.id
+        }
+        let project = KnowledgeProject(name: name)
+        projects.append(project)
+        try? KnowledgeEntityStore.save(projects: projects, people: people)
+        return project.id
+    }
+
+    func assignProject(_ projectID: UUID?, to sessionID: UUID) {
+        mutateRecord(sessionID) { $0.projectID = projectID }
+    }
+
+    func project(for record: SessionRecord) -> KnowledgeProject? {
+        guard let projectID = record.projectID else { return nil }
+        return projects.first { $0.id == projectID }
+    }
+
+    func linkPerson(named rawName: String, to sessionID: UUID) {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        let personID: UUID
+        if let existing = people.first(where: {
+            $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame
+                || $0.aliases.contains { $0.localizedCaseInsensitiveCompare(name) == .orderedSame }
+        }) {
+            personID = existing.id
+        } else {
+            let person = KnowledgePerson(name: name)
+            people.append(person)
+            personID = person.id
+            try? KnowledgeEntityStore.save(projects: projects, people: people)
+        }
+        mutateRecord(sessionID) { record in
+            if !record.personIDs.contains(personID) { record.personIDs.append(personID) }
+        }
+    }
+
+    func timeline(for projectID: UUID) -> [ProjectTimelineEntry] {
+        KnowledgeEntityStore.timeline(projectID: projectID, records: history)
+    }
+
     func correctTranscript(sessionID: UUID, lineID: UUID, text rawText: String, learn: Bool = true) {
         let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
@@ -255,6 +300,29 @@ extension AppModel {
         }
     }
 
+    func askGlobalMemory() {
+        let request = historySearch.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !request.isEmpty, !globalMemoryAnswering else { return }
+        let records = Array(filteredHistory.prefix(10))
+        guard !records.isEmpty else { globalMemoryAnswer = "Nenhuma memória relevante encontrada."; return }
+        if ProcessInfo.processInfo.environment["CUEME_UI_TESTING"] == "1" {
+            globalMemoryAnswer = UITestFixtures.answer(for: records)
+            return
+        }
+        globalMemoryAnswering = true
+        globalMemoryAnswer = nil
+        Task {
+            do {
+                globalMemoryAnswer = try await GlobalMemoryAssistant.answer(
+                    records: records, request: request, model: coachModel
+                )
+            } catch {
+                globalMemoryAnswer = error.localizedDescription
+            }
+            globalMemoryAnswering = false
+        }
+    }
+
     func generateArtifact(
         for sessionID: UUID,
         request: String,
@@ -276,7 +344,14 @@ extension AppModel {
                 updated.artifacts.append(.init(kind: kind, title: title, body: output))
                 switch kind {
                 case .review:
-                    if let extraction = SessionPostProcessor.parseReview(output, preserving: updated.minutes) {
+                    if var extraction = SessionReviewParser.parseReview(output, preserving: updated.minutes) {
+                        extraction.review.decisions = extraction.review.decisions.map {
+                            enriched($0, record: updated)
+                        }
+                        extraction.review.openQuestions = extraction.review.openQuestions.map {
+                            enriched($0, record: updated)
+                        }
+                        extraction.takeaways = extraction.takeaways.map { enriched($0, record: updated) }
                         updated.minutes = extraction.minutes
                         updated.summaryBullets = extraction.minutes.topics.map { "\($0.title): \($0.summary)" }
                         let existing = Set(updated.takeaways.map { $0.text.lowercased() })
@@ -291,7 +366,7 @@ extension AppModel {
                         updated.summaryBullets = minutes.topics.map { "\($0.title): \($0.summary)" }
                     }
                 case .takeaways:
-                    let generated = SessionPostProcessor.parseTakeaways(output)
+                    let generated = SessionReviewParser.parseTakeaways(output)
                     let existing = Set(updated.takeaways.map { $0.text.lowercased() })
                     updated.takeaways.append(contentsOf: generated.filter { !existing.contains($0.text.lowercased()) })
                 case .answer, .custom:
@@ -342,7 +417,8 @@ extension AppModel {
             notes: sessionNotes,
             takeaways: sessionTakeaways,
             review: meetingReview,
-            artifacts: sessionArtifacts
+            artifacts: sessionArtifacts,
+            projectID: activeProjectID
         )
         SessionStore.save(record)
     }
@@ -353,5 +429,21 @@ extension AppModel {
             if line.hasPrefix("- ") { line.removeFirst(2) }
             return line.isEmpty ? nil : line
         }
+    }
+
+    private func enriched(_ item: MeetingReviewItem, record: SessionRecord) -> MeetingReviewItem {
+        var item = item
+        item.evidence = MemoryEvidenceLinker.evidence(for: item.text, in: record)
+        item.confidence = item.evidence.isEmpty ? 0.65 : 0.9
+        item.createdInSessionID = record.id
+        return item
+    }
+
+    private func enriched(_ item: SessionTakeaway, record: SessionRecord) -> SessionTakeaway {
+        var item = item
+        item.evidence = MemoryEvidenceLinker.evidence(for: item.text, in: record)
+        item.confidence = item.evidence.isEmpty ? 0.65 : 0.9
+        item.createdInSessionID = record.id
+        return item
     }
 }

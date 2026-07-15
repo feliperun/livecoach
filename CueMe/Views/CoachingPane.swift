@@ -104,6 +104,9 @@ private struct HeroCard: View {
             // Uma única pista visual. Enquanto a rede responde, esta é local.
             if !card.guidePT.isEmpty {
                 Text(card.guidePT)
+                    .accessibilityIdentifier("coach.guide")
+                    .accessibilityLabel(card.guidePT)
+                    .accessibilityValue(card.guidePT)
                     .font(.system(size: phrase == nil ? 18 : 12, weight: .bold, design: .rounded))
                     .foregroundStyle(phrase == nil ? accent : .secondary)
                     .lineLimit(1)

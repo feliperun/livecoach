@@ -20,6 +20,7 @@ enum SessionArchive {
             "- Idioma: \(record.conversationLang)",
             ""
         ]
+        if let projectID = record.projectID { lines.insert("- Projeto ID: \(projectID.uuidString)", at: 6) }
         appendSummary(record, to: &lines)
         appendTakeaways(record, to: &lines)
         appendReview(record, to: &lines)
@@ -63,7 +64,10 @@ enum SessionArchive {
         if record.takeaways.isEmpty {
             lines.append("_Nenhuma pendência registrada._")
         } else {
-            lines += record.takeaways.map { "- [\($0.isDone ? "x" : " ")] \($0.text)" }
+            for item in record.takeaways {
+                lines.append("- [\(item.isDone ? "x" : " ")] \(item.text)")
+                appendEvidence(item.evidence, to: &lines)
+            }
         }
         lines.append("")
     }
@@ -72,16 +76,28 @@ enum SessionArchive {
         guard !record.review.isEmpty else { return }
         if !record.review.decisions.isEmpty {
             lines += ["## Decisões", ""]
-            lines += record.review.decisions.map { "- \($0.text)" }
+            for item in record.review.decisions {
+                lines.append("- \(item.text)")
+                appendEvidence(item.evidence, to: &lines)
+            }
             lines.append("")
         }
         if !record.review.openQuestions.isEmpty {
             lines += ["## Questões em aberto", ""]
-            lines += record.review.openQuestions.map { "- \($0.text)" }
+            for item in record.review.openQuestions {
+                lines.append("- \(item.text)")
+                appendEvidence(item.evidence, to: &lines)
+            }
             lines.append("")
         }
         if !record.review.followUp.isEmpty {
             lines += ["## Follow-up", "", record.review.followUp, ""]
+        }
+    }
+
+    private static func appendEvidence(_ evidence: [MemoryEvidence], to lines: inout [String]) {
+        for source in evidence.prefix(3) {
+            lines.append("  - Evidência [\(clock(source.timestamp))]: \(source.quote)")
         }
     }
 

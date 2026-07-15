@@ -47,6 +47,9 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
    `SessionOrigin` records whether memory came from live capture, an audio file
    or a Voice Memos share; imported sources never persist their original absolute
    path. Public external handoffs converge on an atomic `ExternalAudioInbox`.
+   `SemanticMemoryIndex` is a derived projection only: relational metadata,
+   FTS5 and sqlite-vec vectors can be rebuilt from portable records. Projects,
+   people and evidence references use stable UUIDs.
 8. **Views** (`Views/`) — SwiftUI only. Reads `AppModel`/`SessionRecord`, calls
    `AppModel` command methods, never touches `SessionCoordinator` or the audio
    layer directly.
@@ -116,9 +119,10 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 - **Voice Memos integration uses public handoff surfaces only.** Share Extension,
   Shortcuts, document-open and drag-and-drop converge on an atomic inbox; no code
   enumerates Apple's private library ([ADR 0027](adr/0027-supported-external-audio-ingress.md)).
-- **Knowledge search never calls an external service.** The in-memory index is
-  rebuilt from durable `SessionRecord` fields and applies date/type filters
-  before lexical scoring. Selecting Deepgram for import affects transcription,
+- **Knowledge search never calls an external service.** FTS5/BM25 provides exact
+  retrieval, local sentence embeddings plus sqlite-vec provide semantic retrieval,
+  and reciprocal-rank fusion combines them after date/type filtering. The legacy
+  in-memory scorer remains a fallback. Selecting Deepgram affects transcription,
   not search.
 - **A session is never silently healthy.** Mic and system channel states are
   independent; digital-zero mic data and an interrupted `SCStream` must be
@@ -151,5 +155,6 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 - [ ] Inputs/outputs validated at the boundary.
 - [ ] Respects the layer direction (§ Core layers) — no upward calls.
 - [ ] Unit tests close to the change.
+- [ ] E2E test for every key or user-visible primary workflow change.
 - [ ] `sentrux gate .` shows no degradation.
 - [ ] ADR if it introduces a cross-cutting pattern or external dependency.
