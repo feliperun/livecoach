@@ -178,7 +178,7 @@ final class CueMeMemoryE2ETests: XCTestCase {
         XCTAssertTrue(app.buttons["home.profile.sales"].exists)
     }
 
-    func testCreatesRenamesLabelsAndEditsAMarkdownNote() {
+    func testCreatesRenamesLabelsAndEditsAMarkdownNoteWithVisualBlocks() {
         continueAfterFailure = false
         let app = launchApp()
         defer { app.terminate() }
@@ -197,30 +197,60 @@ final class CueMeMemoryE2ETests: XCTestCase {
         title.typeText("Mapa da minha jornada")
         app.buttons["note.title.save"].click()
 
-        let editor = app.textViews["note.editor"]
-        XCTAssertTrue(editor.waitForExistence(timeout: 3))
-        editor.click()
-        editor.typeText("# Aprendizados\n\nCoragem também é memória disponível na hora certa.")
+        let headingEditor = app.textViews["note.block.editor.0"]
+        XCTAssertTrue(headingEditor.waitForExistence(timeout: 3))
+        headingEditor.click()
+        headingEditor.typeText("/")
+        let headingCommand = app.buttons["note.block.command.heading1"]
+        XCTAssertTrue(headingCommand.waitForExistence(timeout: 3))
+        headingCommand.click()
+        XCTAssertTrue(headingEditor.waitForExistence(timeout: 3))
+        headingEditor.typeText("Aprendizados")
+        headingEditor.typeKey(.return, modifierFlags: [])
+
+        let paragraphEditor = app.textViews["note.block.editor.1"]
+        XCTAssertTrue(paragraphEditor.waitForExistence(timeout: 3))
+        paragraphEditor.typeText("A memória ajuda na hora exata.")
 
         app.buttons["note.labels"].click()
         let label = app.textFields["note.label.input"]
         XCTAssertTrue(label.waitForExistence(timeout: 3))
         label.click()
-        label.typeText("crescimento")
+        // Avoid `c` here: macOS 26's XCUI keyboard synthesizer drops that key
+        // under some active keyboard layouts, even though the field has focus.
+        label.typeText("jornada")
         app.buttons["note.label.add"].click()
-        XCTAssertTrue(app.buttons["note.label.crescimento"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["note.label.jornada"].waitForExistence(timeout: 3))
         app.typeKey(.escape, modifierFlags: [])
 
-        let preview = app.buttons["note.editor.preview"]
-        XCTAssertTrue(preview.waitForExistence(timeout: 3))
-        XCTAssertTrue(preview.isHittable)
-        preview.click()
-        let readingView = app.descendants(matching: .any)["note.editor.reading"]
-        XCTAssertTrue(readingView.waitForExistence(timeout: 3))
-        let renderedText = readingView.value as? String ?? ""
-        XCTAssertTrue(renderedText.contains("Aprendizados"))
-        XCTAssertTrue(renderedText.contains("Coragem também é memória disponível na hora certa."))
+        let source = app.buttons["note.editor.source"]
+        XCTAssertTrue(source.waitForExistence(timeout: 3))
+        source.click()
+        let rawMarkdown = app.textViews["note.editor.raw"]
+        XCTAssertTrue(rawMarkdown.waitForExistence(timeout: 3))
+        let markdown = rawMarkdown.value as? String ?? ""
+        XCTAssertTrue(markdown.contains("# Aprendizados"))
+        XCTAssertTrue(markdown.contains("A memória ajuda na hora exata."))
         XCTAssertTrue(app.buttons["note.rename"].label.contains("Mapa da minha jornada"))
+    }
+
+    func testVisualBlockEditorFormatsInlineTextAsMarkdown() {
+        continueAfterFailure = false
+        let app = launchApp()
+        defer { app.terminate() }
+
+        app.buttons["home.new-note"].click()
+        let editor = app.textViews["note.block.editor.0"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 3))
+        editor.click()
+        editor.typeText("Memória forte")
+        editor.typeKey("a", modifierFlags: .command)
+        editor.typeKey("b", modifierFlags: .command)
+
+        app.buttons["note.editor.source"].click()
+        let rawMarkdown = app.textViews["note.editor.raw"]
+        XCTAssertTrue(rawMarkdown.waitForExistence(timeout: 3))
+        XCTAssertEqual(rawMarkdown.value as? String, "**Memória forte**")
     }
 
     func testSavedSessionReceivesASignificantGeneratedTitle() {

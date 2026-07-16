@@ -80,3 +80,4 @@ proposed → active → superseded
 | [0031](0031-file-first-memory-note-corpus.md) | File-first Memory Note corpus | active |
 | [0032](0032-second-brain-writing-workspace.md) | Second Brain writing workspace | active |
 | [0033](0033-explicit-personal-memory-for-live-coach.md) | Explicit personal memory for the live Coach | active |
+| [0034](0034-native-markdown-block-editor.md) | Native visual blocks with canonical Markdown | active |

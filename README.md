@@ -38,9 +38,10 @@ subscription/login), so there's nothing to configure and no key to leak.
   Memory Note is a folder containing canonical `note.md` frontmatter plus its
   recordings and attachments. JSON is a compatibility/structured sidecar;
   SQLite, FTS5, embeddings and sqlite-vec are rebuildable indexes.
-- **Beautiful Markdown writing and reading** — create notes and journal entries
-  directly from home, edit in Markdown, switch to a spacious typographic reading
-  mode, organize with Projects and cross-cutting labels, and attach local files.
+- **Notion-style blocks, plain Markdown files** — create notes and journal entries
+  directly from home, type `/` for headings, lists, checklists, quotes, code or a
+  divider, format text without seeing delimiters, and switch to the exact Markdown
+  source whenever you want. Organize with Projects and labels, and attach local files.
 - **A unified memory model** — written notes, live meetings, interviews, sales
   calls, imported audio and Voice Memos share the same base entity and local
   hybrid search. Each type has a recognizable icon in the library.

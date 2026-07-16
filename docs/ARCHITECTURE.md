@@ -86,7 +86,8 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
   `HotkeyManager` (global ⌥Space show/hide), `SessionBrief` (+ `BriefStore`),
   reusable `BriefProfile`s, `MemoryNote` (the base entity for written and recorded
   experiences; `SessionRecord` is a migration alias), `NoteDocument` (canonical
-  Markdown/frontmatter), `ProjectWorkspaceStore` (Project folders and `project.md`),
+  Markdown/frontmatter), `MarkdownBlockDocument` (transient visual block projection),
+  `ProjectWorkspaceStore` (Project folders and `project.md`),
   `SessionArchive`/`SessionStore` (recursive file-first persistence and migration),
   `ExternalAudioInbox` (atomic App Group handoff shared with the audio-only
   Share Extension), `ImportMeetingAudioIntent` (Shortcuts ingress),
@@ -98,7 +99,8 @@ lives in actors; the UI reads an `@Observable` `AppModel` on the main actor.
 - **Views/** — glance-first SwiftUI: `HeaderBar` with live channel meters,
   compact `QuestionBanner`, user-controlled `CoachingPane`, compact live health,
   `MeetingPanel` (passive-mode status when the coach is off), `TranscriptPane`,
-  `SummaryPane`, `BriefEditor`, `SessionSidebar`, `MemoryNoteEditor`, `SessionWorkspaceView`
+  `SummaryPane`, `BriefEditor`, `SessionSidebar`, `MemoryNoteEditor`,
+  `MarkdownBlockEditor`/`MarkdownBlockTextView`, `SessionWorkspaceView`
   (+ `WaveformPlayerView` and the live transport),
   `AboutView`, `Theme`, and `Highlighter` (on-device `NaturalLanguage` tiering of
   translated lines).
@@ -151,7 +153,8 @@ the app reloads filesystem edits.
 On `stop()`, `MeetingRecorder` has already written synchronized `self.m4a` and
 `other.m4a` beside the Note. The sidecar stores only portable relative folder
 identity, never an absolute path. `SessionSidebar` keeps the complete library,
-Project and label filters visible; `MemoryNoteEditor` provides editing/reading;
+Project and label filters visible; `MemoryNoteEditor` provides native visual block
+editing with an exact Markdown source mode;
 `SessionWorkspaceView` preserves the same coach/summary/transcript navigation
 after the event, plus timeline notes,
 takeaways, editable timestamped notes, named participants, auditable transcript
@@ -194,7 +197,7 @@ to Nova-3. Translation remains on-device in either configuration.
 - `CueMeUITests` launches the real macOS app with isolated meeting fixtures and
   a temporary sqlite-vec database. It exercises semantic history search,
   evidence-backed review navigation, Project timelines, capture/recording/Coach,
-  the home/profile surface, Markdown authoring, rename/labels, generated titles
+  the home/profile surface, visual block and Markdown-source authoring, rename/labels, generated titles
   and theme selection through the UI without modifying the user's archive.
 - Logging via `OSLog` (`subsystem: "CueMe"`).
 - Releases: `release-please` (Conventional Commits → versioned CHANGELOG + GitHub

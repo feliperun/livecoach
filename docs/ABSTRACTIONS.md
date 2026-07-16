@@ -74,6 +74,7 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 | External audio handoff | `CueMeShare` + `ImportMeetingAudioIntent` + `ExternalAudioInbox` | Audio-only Share Extension, Shortcuts, document-open and drop; no private Voice Memos scan. |
 | CV import | `PDFKit` in `BriefEditor` | Extracts text from a pasted/imported résumé. |
 | Canonical personal corpus | `FileManager` + Markdown/frontmatter in `NoteDocument`, `ProjectWorkspaceStore`, `SessionStore` | User-selectable root; Project folders and Note folders remain readable without CueMe. |
+| Visual writing projection | `MarkdownBlockDocument` + native `MarkdownBlockEditor`/`NSTextView` | Notion-like blocks and inline formatting are transient; every mutation serializes to the canonical Markdown body. |
 | Derived knowledge index | SQLite3 + FTS5 + sqlite-vec in `SemanticMemoryIndex` | Local, rebuildable exact and semantic projection; never the source of truth. |
 | App configuration | `JSONEncoder`/`Decoder` in `BriefStore`/`MeetingContextStore` | Briefs, reusable contexts, people and glossary cache in Application Support. |
 | Packaging | `xcodebuild` + `hdiutil` in `scripts/package.sh` | Local only — see [Getting Started](GETTING-STARTED.md) and [Packaging](PACKAGING.md). |
@@ -153,6 +154,9 @@ Data flows one direction, top to bottom; each layer only knows the one below it.
 - **Markdown is not a mirror.** Any saved mutation goes through `SessionStore.save`,
   which rewrites canonical `note.md`, structured `session.json`, and the legacy
   `session.md` compatibility export. Reads merge `note.md` over JSON.
+- **Blocks are a view, not a document format.** `MarkdownBlockDocument` may be
+  rebuilt at any time from the Markdown body; no block JSON or editor database is
+  allowed to become a second source of truth.
 - **`ClaudeSession` always spawns from an isolated empty cwd with hooks
   disabled.** This is the containment boundary against the CLI leaking the
   *user's own* project context into the coach's output.

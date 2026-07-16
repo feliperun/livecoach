@@ -56,8 +56,9 @@ onto the library. They are **accelerators for making a durable note**:
   and rebuilt at any time without losing knowledge.
 - **Capture should be easier than forgetting.** Writing, journaling, audio import
   and live recording are first-class entry points from the home screen.
-- **Reading is part of writing.** Typography, spacing, light/dark appearance and a
-  calm reading mode should make returning to a note genuinely inviting.
+- **Reading is part of writing.** A calm, typographic block editor should feel
+  finished while typing; Markdown syntax stays available without getting between
+  the person and the thought.
 - **Intelligence preserves provenance.** Generated titles never overwrite a user
   rename. Decisions and answers link back to evidence. AI enriches the note but
   does not become its owner.
@@ -75,7 +76,7 @@ onto the library. They are **accelerators for making a durable note**:
 
 CueMe 1.0 is the point where the library, not the recorder, is the center of the
 product. It includes file-first Memory Notes and Project folders, frontmatter,
-labels, attachments, Markdown editing and reading, meaningful LLM-generated
+labels, attachments, visual block editing with canonical Markdown, meaningful LLM-generated
 titles, user renaming, local hybrid search, system/light/dark themes, explicit
 profiles on home, audio journaling, and opt-in relevant-memory grounding for the
 live Coach—while preserving the existing capture, transcription, translation,

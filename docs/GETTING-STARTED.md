@@ -49,8 +49,10 @@ when you click the refresh button in the library. SQLite is only an index and ma
 be deleted and rebuilt.
 
 From home, choose **New Note**, **Journal**, or **Record**. The header of any Note
-renames it, assigns a Project and manages labels. Written Notes open in the Markdown
-editor; recorded Notes also expose review, Coach, summary, transcript and actions.
+renames it, assigns a Project and manages labels. Written Notes open in the visual
+block editor: type `/` for headings, lists, checklists, quotes, code and dividers;
+use **Source** to edit the exact Markdown. Recorded Notes also expose review, Coach,
+summary, transcript and actions.
 Appearance follows macOS until you pin Light or Dark in the top bar.
 
 ## Daily commands
