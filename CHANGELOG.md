@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/feliperun/cueme/compare/v1.0.0...v1.1.0) (2026-07-16)
+
+
+### Features
+
+* add native Markdown block editor ([#28](https://github.com/feliperun/cueme/issues/28)) ([0e29f05](https://github.com/feliperun/cueme/commit/0e29f0581aa0cd3a45e51e48c8feed2cc865937a))
+
 ## [1.0.0](https://github.com/feliperun/cueme/compare/v0.14.0...v1.0.0) (2026-07-15)
 
 
