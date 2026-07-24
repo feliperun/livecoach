@@ -19,54 +19,69 @@ jobs:
     timeout-minutes: 25
     env:
       TAG: ${{ inputs.tag || github.event.release.tag_name }}
-      HAS_DEVELOPER_ID: ${{ secrets.DEVELOPER_ID_P12_BASE64 != '' }}
+      HAS_CERT: ${{ secrets.SIGNING_CERTIFICATE_P12_BASE64 != '' }}
+      HAS_NOTARY: ${{ secrets.NOTARY_APPLE_ID != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.TAG }}
 
-      - name: Require stable release signing identity
-        if: ${{ env.HAS_DEVELOPER_ID != 'true' }}
+      # A stable Apple signing identity — Developer ID *or* the free Personal
+      # Team "Apple Development" certificate — keeps the app's designated
+      # requirement, and therefore its macOS TCC grants, constant across Sparkle
+      # updates. Ad-hoc signing resets them on every update, so refuse to ship
+      # without a real certificate (see ADR 0036).
+      - name: Require a signing certificate
+        if: ${{ env.HAS_CERT != 'true' }}
         run: |
-          echo "::error::Developer ID secrets are required. Ad-hoc updates invalidate macOS TCC permissions."
+          echo "::error::SIGNING_CERTIFICATE_P12_BASE64 is required (see ADR 0036)."
           exit 1
 
       - name: Resolve version
         run: echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
 
-      - name: Import Developer ID certificate
-        if: ${{ env.HAS_DEVELOPER_ID == 'true' }}
+      - name: Import signing certificate
         env:
-          P12: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
-          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          P12: ${{ secrets.SIGNING_CERTIFICATE_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
           echo "$P12" | base64 --decode > certificate.p12
           security import certificate.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          identity=$(security find-identity -v -p codesigning build.keychain | sed -n 's/.*"\(.*\)".*/\1/p' | head -1)
+          [ -n "$identity" ] || { echo "::error::Imported certificate has no codesigning identity"; exit 1; }
+          team=$(printf '%s' "$identity" | sed -n 's/.*(\([A-Z0-9]\{10\}\)).*/\1/p')
+          [ -n "$team" ] || { echo "::error::Could not derive Team ID from identity: $identity"; exit 1; }
+          echo "SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+          echo "SIGNING_TEAM=$team" >> "$GITHUB_ENV"
+          echo "Signing as: $identity (team $team)"
 
       - name: Build DMG
         env:
-          CUEME_ADHOC_SIGN: ${{ env.HAS_DEVELOPER_ID == 'true' && '0' || '1' }}
-          CUEME_SIGNING_IDENTITY: ${{ env.HAS_DEVELOPER_ID == 'true' && 'Developer ID Application' || '' }}
-          CUEME_DEVELOPMENT_TEAM: ${{ secrets.NOTARY_TEAM_ID }}
+          CUEME_ADHOC_SIGN: '0'
+          CUEME_SIGNING_IDENTITY: ${{ env.SIGNING_IDENTITY }}
+          CUEME_DEVELOPMENT_TEAM: ${{ env.SIGNING_TEAM }}
         run: ./scripts/package.sh "$VERSION"
 
+      # Notarization needs a paid Developer ID identity. Skipped for the free
+      # Personal Team cert — those builds ship unnotarized (one-time Gatekeeper
+      # "Open Anyway" on first install; Sparkle updates stay in-place).
       - name: Notarize and staple
-        if: ${{ env.HAS_DEVELOPER_ID == 'true' }}
+        if: ${{ startsWith(env.SIGNING_IDENTITY, 'Developer ID Application') && env.HAS_NOTARY == 'true' }}
         env:
           APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
-          TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          TEAM_ID: ${{ env.SIGNING_TEAM }}
           APP_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
         run: |
           xcrun notarytool submit "dist/CueMe-$VERSION.dmg" \
             --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APP_PASSWORD" --wait
           xcrun stapler staple "dist/CueMe-$VERSION.dmg"
-          cd dist
-          shasum -a 256 "CueMe-$VERSION.dmg" > "CueMe-$VERSION.dmg.sha256"
+          shasum -a 256 "dist/CueMe-$VERSION.dmg" > "dist/CueMe-$VERSION.dmg.sha256"
 
       - name: Install Sparkle tools
         env:

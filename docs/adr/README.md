@@ -82,3 +82,4 @@ proposed → active → superseded
 | [0033](0033-explicit-personal-memory-for-live-coach.md) | Explicit personal memory for the live Coach | active |
 | [0034](0034-native-markdown-block-editor.md) | Native visual blocks with canonical Markdown | active |
 | [0035](0035-automated-release-asset-publishing.md) | Automated release-asset publishing and appcast health | active |
+| [0036](0036-free-personal-team-signing.md) | Free Personal Team signing for auto-update | active |
