@@ -7,6 +7,8 @@ struct AskCueMeBar: View {
     @Environment(AppModel.self) private var app
     let record: SessionRecord
     @Binding var tab: SessionWorkspaceTab
+    @State private var expanded = false
+    @FocusState private var composerFocused: Bool
 
     private var answers: [SessionArtifact] {
         record.artifacts.filter { $0.kind == .answer }
@@ -16,17 +18,48 @@ struct AskCueMeBar: View {
     var body: some View {
         VStack(spacing: 0) {
             Rectangle().fill(Theme.line2).frame(height: 1)
-            VStack(spacing: 10) {
-                if let latest = answers.last {
-                    answerCard(latest)
+            // Collapsed to a slim trigger by default — it expands to the live
+            // composer only on demand, so it never competes for keyboard focus
+            // with the note/review editors below it.
+            if expanded {
+                VStack(spacing: 10) {
+                    if let latest = answers.last { answerCard(latest) }
+                    composer
                 }
-                composer
+                .frame(maxWidth: 700)
+                .padding(.horizontal, 26).padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+            } else {
+                trigger
             }
-            .frame(maxWidth: 700)
-            .padding(.horizontal, 26).padding(.vertical, 12)
-            .frame(maxWidth: .infinity)
         }
         .background(Theme.paper)
+    }
+
+    private var trigger: some View {
+        Button {
+            expanded = true
+            DispatchQueue.main.async { composerFocused = true }
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: "sparkles").font(.system(size: 12)).foregroundStyle(Theme.violet)
+                Text(answers.isEmpty
+                     ? "Pergunte ao CueMe sobre esta nota — esclareça, melhore, resuma…"
+                     : "Ask CueMe · \(answers.count) resposta\(answers.count == 1 ? "" : "s")")
+                    .font(.ui(13)).foregroundStyle(Theme.faint)
+                Spacer()
+                Text("✦").font(.ui(12)).foregroundStyle(Theme.violet)
+            }
+            .frame(maxWidth: 700)
+            .padding(.horizontal, 12).frame(height: 40)
+            .background(Theme.canvas, in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.line))
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 26).padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("ask.open")
     }
 
     private var composer: some View {
@@ -38,6 +71,7 @@ struct AskCueMeBar: View {
                 text: $app.postSessionPrompt
             )
             .textFieldStyle(.plain).font(.ui(13))
+            .focused($composerFocused)
             .accessibilityIdentifier("ask.input")
             .onSubmit { app.askAboutSession(record.id) }
             if isAnswering { ProgressView().controlSize(.small) }

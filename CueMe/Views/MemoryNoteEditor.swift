@@ -22,9 +22,6 @@ struct MemoryNoteEditor: View {
         VStack(spacing: 0) {
             toolbar
             Rectangle().fill(Theme.divider).frame(height: 1)
-            if isBlank {
-                BlankNoteState(record: record)
-            }
             if sourceMode {
                 sourceEditor
             } else {
@@ -33,6 +30,11 @@ struct MemoryNoteEditor: View {
                     focusedBlockID: $focusedBlockID,
                     formatRequest: formatRequest
                 )
+                // Empty-note affordances sit *below* the editor so the first
+                // block stays at the top and immediately focusable.
+                if isBlank {
+                    BlankNoteState(record: record).frame(maxHeight: 260)
+                }
             }
         }
         .background(Theme.paper)
