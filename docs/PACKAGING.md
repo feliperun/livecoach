@@ -16,6 +16,15 @@ app's designated requirement and invalidates macOS TCC grants for microphone
 and Screen & System Audio Recording. Ad-hoc packaging remains available only
 for disposable local/CI builds.
 
+`release-please` dispatches `release-assets` automatically for every new tag
+(its own `release: published` event cannot cascade because it is created with
+`GITHUB_TOKEN`), the packaging run verifies the DMG, checksum and signed appcast
+before it goes green, and a weekly `release-health` job fails if the latest
+appcast feed is unreachable or unsigned. See
+[ADR 0035](adr/0035-automated-release-asset-publishing.md). Until the Developer
+ID secrets are configured the dispatched run fails loudly on each release — that
+is the intended signal.
+
 ## Build a `.dmg` locally
 
 ```sh

@@ -96,3 +96,23 @@ jobs:
           "dist/CueMe-$VERSION.dmg.sha256"
           "dist/appcast.xml"
           --clobber
+
+      # Fail loud if a "successful" run somehow shipped a release without the
+      # assets Sparkle needs. Guards against silent no-ops that leave the
+      # auto-update feed pointing at a 404 (see ADR 0035).
+      - name: Verify published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          names=$(gh release view "$TAG" -R "${{ github.repository }}" --json assets --jq '.assets[].name')
+          echo "Assets on $TAG:"; echo "$names"
+          for required in "CueMe-$VERSION.dmg" "CueMe-$VERSION.dmg.sha256" "appcast.xml"; do
+            grep -qx "$required" <<<"$names" \
+              || { echo "::error::Release $TAG is missing asset $required"; exit 1; }
+          done
+          grep -q "CueMe-$VERSION.dmg" dist/appcast.xml \
+            || { echo "::error::appcast.xml does not reference CueMe-$VERSION.dmg"; exit 1; }
+          grep -q "edSignature" dist/appcast.xml \
+            || { echo "::error::appcast.xml is missing its EdDSA signature"; exit 1; }
+          echo "Verified: $TAG serves DMG, checksum and a signed appcast."
