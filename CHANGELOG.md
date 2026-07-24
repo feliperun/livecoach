@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.2.0](https://github.com/feliperun/cueme/compare/v1.1.0...v1.2.0) (2026-07-24)
+
+
+### Features
+
+* **audio:** in-progress external audio import (share extension + inbox) ([8d90903](https://github.com/feliperun/cueme/commit/8d90903fd6a80f9ee484ea8335280c824e06bc9e))
+* **ui:** note-first three-column workspace redesign ([4cb4305](https://github.com/feliperun/cueme/commit/4cb4305ba59fabab54681faa0d7dd8f16df0a96e))
+* **ui:** note-first three-column workspace redesign ([a785259](https://github.com/feliperun/cueme/commit/a785259f850cc8e458d642c3006b647d587838ff))
+
+
+### Bug Fixes
+
+* **ui:** keep note/review editors focusable under Ask CueMe bar ([9a13a29](https://github.com/feliperun/cueme/commit/9a13a2931f7daa206cc39bf434b025c56fc3385b))
+
 ## [1.1.0](https://github.com/feliperun/cueme/compare/v1.0.0...v1.1.0) (2026-07-16)
 
 
